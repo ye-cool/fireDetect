@@ -11,7 +11,19 @@ class CameraDriver:
 
     def start(self):
         try:
+            # 优先尝试 Libcamera (树莓派 CSI 摄像头)
+            # 在 OpenCV 中，通常使用 gstreamer 管道或者特定的 backend 来调用 libcamera
+            # 但最简单的方法是尝试 index 0，如果树莓派 OS 配置正确 (dtoverlay=imx219等)，OpenCV 也能读取
+            
+            # 尝试打开摄像头
             self.cap = cv2.VideoCapture(self.camera_id)
+            
+            # 检查是否成功
+            if not self.cap.isOpened():
+                # 如果是 CSI 摄像头，有时候需要指定 API Preference
+                logging.info("尝试使用 V4L2 后端打开摄像头...")
+                self.cap = cv2.VideoCapture(self.camera_id, cv2.CAP_V4L2)
+            
             if not self.cap.isOpened():
                 logging.warning(f"无法打开摄像头 ID {self.camera_id}，尝试使用模拟模式")
                 self.is_open = False
@@ -20,6 +32,8 @@ class CameraDriver:
                 # 设置分辨率，降低负载
                 self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
                 self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                # 设置缓冲区大小，减少延迟
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         except Exception as e:
             logging.error(f"摄像头初始化失败: {e}")
             self.is_open = False

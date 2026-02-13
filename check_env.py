@@ -94,6 +94,8 @@ def main():
     print("\n--- 检查 AI 服务 ---")
     check_ollama()
 
+    check_camera()
+
     print("\n" + "="*30)
     if all_pass:
         print("🎉 环境检查通过！你可以运行系统了：")

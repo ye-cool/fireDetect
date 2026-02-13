@@ -17,6 +17,7 @@ class SensorManager:
         self.dht_device = None
         self.mq2_pin = Config.PIN_MQ2
         self.i2c_bus = None
+        self._adc_disabled = False
         self._setup()
 
     def _setup(self):
@@ -44,6 +45,8 @@ class SensorManager:
                 HARDWARE_AVAILABLE = False
 
     def _read_ads1115_raw(self, channel: int) -> int:
+        if self._adc_disabled:
+            return 0
         if not (HARDWARE_AVAILABLE and Config.USE_ADC and self.i2c_bus):
             return 0
 
@@ -59,9 +62,19 @@ class SensorManager:
         )
 
         addr = int(Config.ADS1115_ADDRESS)
-        self.i2c_bus.write_i2c_block_data(addr, 0x01, [(config >> 8) & 0xFF, config & 0xFF])
-        time.sleep(0.01)
-        data = self.i2c_bus.read_i2c_block_data(addr, 0x00, 2)
+        try:
+            self.i2c_bus.write_i2c_block_data(addr, 0x01, [(config >> 8) & 0xFF, config & 0xFF])
+            time.sleep(0.01)
+            data = self.i2c_bus.read_i2c_block_data(addr, 0x00, 2)
+        except OSError as e:
+            logging.error(f"ADS1115 I2C 读写失败: {e}")
+            self._adc_disabled = True
+            try:
+                self.i2c_bus.close()
+            except Exception:
+                pass
+            self.i2c_bus = None
+            return 0
         raw = (data[0] << 8) | data[1]
         if raw & 0x8000:
             raw -= 1 << 16
@@ -100,7 +113,7 @@ class SensorManager:
         """
         if HARDWARE_AVAILABLE:
             # 优先使用 ADC 读取模拟值
-            if Config.USE_ADC and self.i2c_bus:
+            if Config.USE_ADC and self.i2c_bus and not self._adc_disabled:
                 try:
                     value = self._read_ads1115_raw(Config.MQ2_ANALOG_CHANNEL)
                     return value > Config.SMOKE_THRESHOLD_ANALOG
@@ -121,7 +134,7 @@ class SensorManager:
 
     def get_mq2_value(self):
         """获取 MQ-2 的原始模拟值 (用于前端显示波形等)"""
-        if HARDWARE_AVAILABLE and Config.USE_ADC and self.i2c_bus:
+        if HARDWARE_AVAILABLE and Config.USE_ADC and self.i2c_bus and not self._adc_disabled:
             try:
                 return self._read_ads1115_raw(Config.MQ2_ANALOG_CHANNEL)
             except Exception:

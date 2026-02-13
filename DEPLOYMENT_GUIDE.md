@@ -55,6 +55,17 @@ scp -r . pi@192.168.1.100:~/fireDetect
 3. 点击 **Transfer files** 图标。
 4. 点击 **Send files**，选择电脑上的 `d:\fireDetect` 文件夹（或压缩包）发送到树莓派的 `/home/pi/` 目录。
 
+### 方法 C: 使用 Git (推荐用于持续开发)
+
+如果你已经将代码推送到 GitHub，这是最方便的方法。
+
+1. **在树莓派终端**执行克隆命令：
+   ```bash
+   cd ~
+   git clone https://github.com/你的用户名/fireDetect.git
+   ```
+2. 后续如果有代码更新，只需在树莓派项目目录下执行 `git pull` 即可同步。
+
 ---
 
 ## 3. 环境配置 (Setup Environment)

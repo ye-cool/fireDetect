@@ -6,11 +6,21 @@ import cv2
 
 class FireLLMAnalyzer:
     def __init__(self):
-        self.client = OpenAI(
-            api_key=Config.LLM_API_KEY,
-            base_url=Config.LLM_BASE_URL
-        )
-        self.model = Config.LLM_MODEL
+        # 根据配置决定使用本地还是云端
+        if Config.LLM_MODE == "local":
+            self.client = OpenAI(
+                api_key="ollama", # Ollama 不需要真实Key，但库需要占位符
+                base_url=Config.LLM_LOCAL_URL
+            )
+            self.model = Config.LLM_MODEL_LOCAL
+            logging.info(f"LLM分析器已初始化 (本地模式: {self.model})")
+        else:
+            self.client = OpenAI(
+                api_key=Config.LLM_API_KEY,
+                base_url=Config.LLM_BASE_URL
+            )
+            self.model = Config.LLM_MODEL_CLOUD
+            logging.info(f"LLM分析器已初始化 (云端模式: {self.model})")
 
     def encode_image(self, image):
         """将OpenCV图像转换为Base64字符串"""
@@ -23,7 +33,8 @@ class FireLLMAnalyzer:
         """
         调用大模型进行多模态分析
         """
-        if not Config.LLM_API_KEY:
+        # 云端模式下如果没有Key则跳过
+        if Config.LLM_MODE == "cloud" and not Config.LLM_API_KEY:
             logging.warning("未配置 LLM API Key，跳过大模型分析")
             return "未配置大模型，仅依据传感器数据报警"
 
@@ -49,6 +60,7 @@ class FireLLMAnalyzer:
         """
 
         try:
+            logging.info(f"正在调用大模型 ({self.model})...")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -70,4 +82,4 @@ class FireLLMAnalyzer:
             return response.choices[0].message.content
         except Exception as e:
             logging.error(f"LLM分析失败: {e}")
-            return "智能分析服务暂时不可用"
+            return f"智能分析服务暂时不可用 ({str(e)})"

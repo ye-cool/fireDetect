@@ -17,6 +17,17 @@ class Config:
     SMOKE_DETECTED_VALUE = 0 # 0通常代表检测到烟雾（低电平触发），视具体模块而定，这里假设低电平触发
     
     # 大模型配置
+    # 模式: "cloud" (使用OpenAI/DeepSeek等云服务) 或 "local" (使用本地Ollama)
+    LLM_MODE = "local" 
+    
+    # --- 云端配置 (LLM_MODE="cloud") ---
     LLM_API_KEY = os.getenv("LLM_API_KEY", "")
     LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
-    LLM_MODEL = "gpt-4o" # 或者其他支持视觉的模型
+    LLM_MODEL_CLOUD = "gpt-4o"
+    
+    # --- 本地配置 (LLM_MODE="local") ---
+    # 推荐使用 Ollama 运行 moondream (轻量级视觉模型) 或 llava
+    # 安装: curl -fsSL https://ollama.com/install.sh | sh
+    # 拉取模型: ollama pull moondream
+    LLM_LOCAL_URL = "http://localhost:11434/v1"
+    LLM_MODEL_LOCAL = "moondream" # 或 "llava:7b" (树莓派上较慢), "llava-phi3"

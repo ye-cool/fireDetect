@@ -39,6 +39,8 @@ class CameraDriver:
                 # 设置分辨率，降低负载
                 self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
                 self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                # 设置 FPS 为 15，避免摄像头采集占用过高带宽和CPU
+                self.cap.set(cv2.CAP_PROP_FPS, 15)
                 # 设置缓冲区大小，减少延迟
                 self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         except Exception as e:

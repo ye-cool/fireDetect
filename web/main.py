@@ -48,11 +48,16 @@ def generate_frames():
             import numpy as np
             frame = np.zeros((480, 640, 3), dtype=np.uint8)
             cv2.putText(frame, "No Camera Signal", (200, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            time.sleep(0.1) # 防止死循环占用CPU
+        else:
+            # 压缩优化：降低JPEG质量以提高传输速度
+            ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+            frame_bytes = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
         
-        ret, buffer = cv2.imencode('.jpg', frame)
-        frame_bytes = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        # 控制帧率：限制推流帧率在 15fps 左右，给 AI 留出算力
+        time.sleep(0.06)
 
 @app.get("/video_feed")
 async def video_feed():

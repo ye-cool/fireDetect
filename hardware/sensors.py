@@ -66,6 +66,7 @@ class SensorManager:
         if raw & 0x8000:
             raw -= 1 << 16
         if raw < 0:
+            logging.warning(f"ADS1115 读到负值 {raw} (channel={channel})，可能接线/配置异常")
             raw = 0
         return int(raw)
 
@@ -105,6 +106,8 @@ class SensorManager:
                     return value > Config.SMOKE_THRESHOLD_ANALOG
                 except Exception as e:
                     logging.error(f"ADC 读取失败: {e}")
+            elif Config.USE_ADC and not self.i2c_bus:
+                logging.warning("已启用 ADC，但 I2C 未就绪；将回退为数字 DO 读取")
             
             # 降级到数字引脚读取
             try:
@@ -123,6 +126,8 @@ class SensorManager:
                 return self._read_ads1115_raw(Config.MQ2_ANALOG_CHANNEL)
             except Exception:
                 return 0
+        if HARDWARE_AVAILABLE and Config.USE_ADC and not self.i2c_bus:
+            return -1
         return 0
 
     def cleanup(self):

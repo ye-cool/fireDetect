@@ -179,12 +179,16 @@
 
             // 更新模拟值显示
             if (data.mq2_value !== undefined) {
-              document.getElementById("mq2-analog").textContent =
-                data.mq2_value;
-              // 计算进度条 (假设最大值 26000 左右)
+              const mq2Val = data.mq2_value;
+              document.getElementById("mq2-analog").textContent = mq2Val;
+              if (mq2Val < 0) {
+                document.getElementById("mq2-analog").textContent = "ADC未就绪";
+              }
+              data.mq2_value;
+              const percent =
+                mq2Val > 0 ? Math.min((mq2Val / 26000) * 100, 100) : 0;
               const percent = Math.min((data.mq2_value / 26000) * 100, 100);
               const barEl = document.getElementById("mq2-bar");
-              barEl.style.width = `${percent}%`;
 
               // 根据浓度改变进度条颜色
               if (data.smoke_detected) {

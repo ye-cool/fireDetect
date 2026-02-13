@@ -10,6 +10,8 @@ class Config:
     
     # ADC 配置 (I2C)
     USE_ADC = True  # 是否使用 ADS1115 读取模拟值
+    I2C_BUS = 1
+    ADS1115_ADDRESS = 0x48
     MQ2_ANALOG_CHANNEL = 0 # ADS1115 的 A0 通道
     SMOKE_THRESHOLD_ANALOG = 15000 # 模拟值阈值 (0-32767)，需校准
     

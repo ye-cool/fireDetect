@@ -3,25 +3,20 @@ import random
 import logging
 from config import Config
 
-# 尝试导入硬件库，如果失败则启用模拟模式
 try:
     import board
-    import busio
     import adafruit_dht
-    import adafruit_ads1x15.ads1115 as ADS
-    from adafruit_ads1x15.analog_in import AnalogIn
     import RPi.GPIO as GPIO
     HARDWARE_AVAILABLE = True
 except (ImportError, NotImplementedError):
-    logging.warning("未检测到树莓派GPIO环境或ADC库，启用传感器模拟模式")
+    logging.warning("未检测到树莓派GPIO环境，启用传感器模拟模式")
     HARDWARE_AVAILABLE = False
 
 class SensorManager:
     def __init__(self):
         self.dht_device = None
         self.mq2_pin = Config.PIN_MQ2
-        self.ads = None
-        self.mq2_analog = None
+        self.i2c_bus = None
         self._setup()
 
     def _setup(self):
@@ -31,32 +26,48 @@ class SensorManager:
                 # 初始化 DHT22
                 self.dht_device = adafruit_dht.DHT22(board.D4)
                 
-                # 初始化 ADS1115 (I2C)
-                if Config.USE_ADC:
-                    try:
-                        i2c = busio.I2C(board.SCL, board.SDA)
-                        self.ads = ADS.ADS1115(i2c)
-                        # 创建单端输入通道 (A0)
-                        # 修正: adafruit-circuitpython-ads1x15 最新版库 API 变更
-                        # 必须从 adafruit_ads1x15.ads1x15 导入 P0 (注意是 ads1x15 不是 ads1115)
-                        try:
-                            from adafruit_ads1x15.ads1x15 import P0, P1, P2, P3
-                            channel_map = {0: P0, 1: P1, 2: P2, 3: P3}
-                            self.mq2_analog = AnalogIn(self.ads, channel_map[Config.MQ2_ANALOG_CHANNEL])
-                            logging.info("ADS1115 ADC 初始化成功")
-                        except ImportError:
-                            # 如果真的导入失败，打印详细错误并禁用 ADC
-                            logging.error("无法从 adafruit_ads1x15.ads1x15 导入 P0，可能是库版本不兼容")
-                            raise
-                    except Exception as e:
-                        logging.error(f"ADS1115 初始化失败: {e}")
-                
                 # 初始化 MQ-2 数字引脚 (作为备份或不使用)
                 GPIO.setmode(GPIO.BCM)
                 GPIO.setup(self.mq2_pin, GPIO.IN)
+
+                if Config.USE_ADC:
+                    try:
+                        from smbus2 import SMBus
+
+                        self.i2c_bus = SMBus(Config.I2C_BUS)
+                        logging.info("ADS1115 I2C 初始化成功")
+                    except Exception as e:
+                        self.i2c_bus = None
+                        logging.error(f"ADS1115 初始化失败: {e}")
             except Exception as e:
                 logging.error(f"传感器硬件初始化失败: {e}")
                 HARDWARE_AVAILABLE = False
+
+    def _read_ads1115_raw(self, channel: int) -> int:
+        if not (HARDWARE_AVAILABLE and Config.USE_ADC and self.i2c_bus):
+            return 0
+
+        mux_map = {0: 0x4, 1: 0x5, 2: 0x6, 3: 0x7}
+        mux = mux_map.get(int(channel), 0x4)
+        config = (
+            0x8000
+            | (mux << 12)
+            | (0x1 << 9)
+            | 0x0100
+            | (0x4 << 5)
+            | 0x0003
+        )
+
+        addr = int(Config.ADS1115_ADDRESS)
+        self.i2c_bus.write_i2c_block_data(addr, 0x01, [(config >> 8) & 0xFF, config & 0xFF])
+        time.sleep(0.01)
+        data = self.i2c_bus.read_i2c_block_data(addr, 0x00, 2)
+        raw = (data[0] << 8) | data[1]
+        if raw & 0x8000:
+            raw -= 1 << 16
+        if raw < 0:
+            raw = 0
+        return int(raw)
 
     def read_dht22(self):
         # ... (保持不变) ...
@@ -88,10 +99,9 @@ class SensorManager:
         """
         if HARDWARE_AVAILABLE:
             # 优先使用 ADC 读取模拟值
-            if Config.USE_ADC and self.mq2_analog:
+            if Config.USE_ADC and self.i2c_bus:
                 try:
-                    value = self.mq2_analog.value
-                    # logging.debug(f"MQ-2 Analog Value: {value}")
+                    value = self._read_ads1115_raw(Config.MQ2_ANALOG_CHANNEL)
                     return value > Config.SMOKE_THRESHOLD_ANALOG
                 except Exception as e:
                     logging.error(f"ADC 读取失败: {e}")
@@ -108,16 +118,20 @@ class SensorManager:
 
     def get_mq2_value(self):
         """获取 MQ-2 的原始模拟值 (用于前端显示波形等)"""
-        if HARDWARE_AVAILABLE and Config.USE_ADC and self.mq2_analog:
+        if HARDWARE_AVAILABLE and Config.USE_ADC and self.i2c_bus:
             try:
-                return self.mq2_analog.value
-            except:
+                return self._read_ads1115_raw(Config.MQ2_ANALOG_CHANNEL)
+            except Exception:
                 return 0
         return 0
 
     def cleanup(self):
-        # ... (保持不变) ...
         if HARDWARE_AVAILABLE:
             if self.dht_device:
                 self.dht_device.exit()
             GPIO.cleanup()
+        if self.i2c_bus:
+            try:
+                self.i2c_bus.close()
+            except Exception:
+                pass

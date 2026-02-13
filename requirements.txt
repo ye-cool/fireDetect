@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+requests
+opencv-python-headless
+adafruit-circuitpython-dht
+RPi.GPIO
+python-dotenv
+openai
+numpy

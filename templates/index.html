@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>厨房火灾边缘智能监测系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .risk-normal {
+        color: #10b981;
+      }
+      .risk-warning {
+        color: #f59e0b;
+      }
+      .risk-danger {
+        color: #ef4444;
+        animation: blink 1s infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0.5;
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-gray-900 text-white min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+      <header
+        class="mb-8 flex justify-between items-center border-b border-gray-700 pb-4"
+      >
+        <div>
+          <h1
+            class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500"
+          >
+            🔥 边缘智能火灾监测系统
+          </h1>
+          <p class="text-gray-400 mt-1">
+            毕业设计 - 多模态数据融合与大模型赋能
+          </p>
+        </div>
+        <div
+          id="connection-status"
+          class="px-3 py-1 rounded bg-green-900 text-green-200 text-sm"
+        >
+          系统在线
+        </div>
+      </header>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- 左侧：视频监控 -->
+        <div
+          class="lg:col-span-2 bg-gray-800 rounded-xl overflow-hidden shadow-lg border border-gray-700"
+        >
+          <div class="p-4 bg-gray-700 flex justify-between items-center">
+            <h2 class="font-semibold flex items-center">
+              <svg
+                class="w-5 h-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                ></path>
+              </svg>
+              实时监控画面
+            </h2>
+            <span class="text-xs text-gray-400">FPS: 30</span>
+          </div>
+          <div class="aspect-w-16 aspect-h-9 bg-black relative">
+            <img
+              src="/video_feed"
+              class="w-full h-full object-contain"
+              alt="Video Feed"
+            />
+          </div>
+        </div>
+
+        <!-- 右侧：传感器数据 -->
+        <div class="space-y-6">
+          <!-- 风险等级卡片 -->
+          <div
+            class="bg-gray-800 rounded-xl p-6 border border-gray-700 text-center"
+          >
+            <h3 class="text-gray-400 uppercase text-sm tracking-wider mb-2">
+              当前风险等级
+            </h3>
+            <div
+              id="risk-display"
+              class="text-5xl font-black risk-normal transition-colors duration-300"
+            >
+              NORMAL
+            </div>
+          </div>
+
+          <!-- 传感器数值 -->
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+              <div class="text-gray-400 text-sm mb-1">温度 (Temperature)</div>
+              <div class="text-2xl font-bold text-blue-400">
+                <span id="temp-val">--</span> °C
+              </div>
+            </div>
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+              <div class="text-gray-400 text-sm mb-1">湿度 (Humidity)</div>
+              <div class="text-2xl font-bold text-blue-400">
+                <span id="hum-val">--</span> %
+              </div>
+            </div>
+            <div
+              class="bg-gray-800 p-4 rounded-xl border border-gray-700 col-span-2"
+            >
+              <div class="text-gray-400 text-sm mb-1">烟雾探测 (MQ-2)</div>
+              <div class="text-xl font-bold" id="smoke-val">未检测</div>
+            </div>
+          </div>
+
+          <!-- AI 分析结果 -->
+          <div
+            class="bg-gray-800 rounded-xl p-4 border border-gray-700 flex-grow"
+          >
+            <h3 class="font-semibold text-purple-400 mb-2 flex items-center">
+              <svg
+                class="w-5 h-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                ></path>
+              </svg>
+              大模型智能分析
+            </h3>
+            <div
+              id="ai-analysis"
+              class="text-sm text-gray-300 bg-gray-900 p-3 rounded h-40 overflow-y-auto font-mono"
+            >
+              正在等待数据...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function updateStatus() {
+        fetch("/api/status")
+          .then((response) => response.json())
+          .then((data) => {
+            // 更新数值
+            document.getElementById("temp-val").textContent =
+              data.temperature.toFixed(1);
+            document.getElementById("hum-val").textContent =
+              data.humidity.toFixed(1);
+
+            const smokeEl = document.getElementById("smoke-val");
+            if (data.smoke_detected) {
+              smokeEl.textContent = "⚠️ 检测到烟雾";
+              smokeEl.className = "text-xl font-bold text-red-500";
+            } else {
+              smokeEl.textContent = "✅ 正常";
+              smokeEl.className = "text-xl font-bold text-green-500";
+            }
+
+            // 更新风险等级
+            const riskEl = document.getElementById("risk-display");
+            riskEl.textContent = data.risk_level.toUpperCase();
+            riskEl.className = `text-5xl font-black transition-colors duration-300 risk-${data.risk_level.toLowerCase()}`;
+
+            // 更新AI分析
+            const aiEl = document.getElementById("ai-analysis");
+            // 如果是JSON字符串，尝试格式化，否则直接显示
+            try {
+              const aiJson = JSON.parse(data.llm_analysis);
+              aiEl.innerHTML = `
+                            <p class="mb-1"><strong class="text-white">风险评估:</strong> ${aiJson.risk_level}</p>
+                            <p class="mb-1"><strong class="text-white">描述:</strong> ${aiJson.description}</p>
+                            <p><strong class="text-white">建议:</strong> ${aiJson.suggestion}</p>
+                        `;
+            } catch (e) {
+              aiEl.textContent = data.llm_analysis || "暂无分析数据";
+            }
+          })
+          .catch((err) => console.error("Error fetching status:", err));
+      }
+
+      // 每2秒轮询一次状态
+      setInterval(updateStatus, 2000);
+      updateStatus();
+    </script>
+  </body>
+</html>

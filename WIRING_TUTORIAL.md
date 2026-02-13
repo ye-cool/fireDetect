@@ -56,10 +56,23 @@ DHT22 模块通常有 3 个针脚（如果是 4 针裸元件，需要自己加�
 
 ---
 
-## 4. 连接 USB 摄像头
+## 4. 连接摄像头
 
-这个最简单：
-直接插入树莓派任意一个 USB 接口（推荐蓝色的 USB 3.0 接口，速度更快）。
+### 选项 A: USB 摄像头
+直接插入树莓派任意一个 USB 接口（推荐蓝色的 USB 3.0 接口）。
+
+### 选项 B: CSI 摄像头 (15-pin 宽排线)
+如果你使用的是树莓派 4B，它的摄像头接口是 **Standard CSI (15-pin)**，这种接口比树莓派 5/Zero 的宽。
+
+1.  **找到接口**: 树莓派 4B 上有两个相似的接口，一个是 `DISPLAY` (靠近USB口)，一个是 `CAMERA` (在 HDMI 接口和音频接口之间)。请插在 **CAMERA** 接口上！
+2.  **连接步骤**:
+    *   轻轻拨起接口上的黑色卡扣。
+    *   将排线插入，**蓝色胶带面朝向以太网/USB接口方向** (也就是金属触点朝向 HDMI 接口方向)。
+    *   按下卡扣固定。
+3.  **系统配置**:
+    *   旧版树莓派 OS (Bullseye之前) 需要 `raspi-config` -> Interface Options -> Legacy Camera -> Enable。
+    *   新版 OS (Bookworm/Bullseye) 默认使用 `libcamera`，通常插上就能用。
+    *   如果无法识别，尝试编辑 `/boot/config.txt` (旧版) 或 `/boot/firmware/config.txt` (新版)，添加 `dtoverlay=ov5647` (如果是500万像素) 或 `dtoverlay=imx219` (如果是800万像素)。
 
 ---
 

@@ -20,6 +20,7 @@ class SensorManager:
         self._setup()
 
     def _setup(self):
+        global HARDWARE_AVAILABLE
         if HARDWARE_AVAILABLE:
             try:
                 # 初始化 DHT22
@@ -30,7 +31,6 @@ class SensorManager:
                 GPIO.setup(self.mq2_pin, GPIO.IN)
             except Exception as e:
                 logging.error(f"传感器硬件初始化失败: {e}")
-                global HARDWARE_AVAILABLE
                 HARDWARE_AVAILABLE = False
 
     def read_dht22(self):

@@ -65,7 +65,9 @@ class SensorManager:
                 return False
         else:
             # 模拟偶尔检测到烟雾 (1% 概率)
-            return random.random() > 0.99
+            # return random.random() > 0.99
+            # 修改：模拟模式下默认不报警，除非手动修改代码测试
+            return False
 
     def cleanup(self):
         if HARDWARE_AVAILABLE:

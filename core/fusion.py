@@ -78,13 +78,18 @@ class DataFusionSystem:
                 risk = "Warning"
             
             # 3. 触发大模型赋能 (如果判定为高风险 或 用户手动请求 - 这里演示自动触发逻辑)
-            # 为了防止频繁调用耗尽Token，我们设置一个冷却机制，或者只在状态变化为Danger时触发
-            # 这里简化逻辑：如果是Danger且没有分析过，或者每隔一段时间分析一次
+            # 为了防止频繁调用耗尽Token，我们设置一个冷却机制
             
             current_risk = risk
             
-            # 如果规则判定危险，调用大模型确认 (Edge-Cloud Collaboration)
-            if current_risk in ["Warning", "Danger"]:
+            # 只有当状态发生变化（例如从Normal变成Danger），或者距离上次分析超过一定时间（如60秒）时，才调用LLM
+            # 这里简单实现：增加一个 last_analysis_time 变量
+            now = time.time()
+            if not hasattr(self, 'last_analysis_time'):
+                self.last_analysis_time = 0
+
+            # 如果规则判定危险，且距离上次分析超过60秒，调用大模型确认
+            if current_risk in ["Warning", "Danger"] and (now - self.last_analysis_time > 60):
                 logging.info(f"检测到异常 ({current_risk})，正在请求大模型分析...")
                 analysis = self.llm.analyze(
                     self.state.temperature, 
@@ -94,9 +99,11 @@ class DataFusionSystem:
                 )
                 with self._lock:
                     self.state.llm_analysis_result = analysis
-            else:
-                with self._lock:
+                self.last_analysis_time = now
+            elif current_risk == "Normal":
+                 with self._lock:
                     self.state.llm_analysis_result = "系统运行正常"
+
 
             with self._lock:
                 self.state.fire_risk_level = current_risk

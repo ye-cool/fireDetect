@@ -37,14 +37,29 @@ class SensorManager:
                         i2c = busio.I2C(board.SCL, board.SDA)
                         self.ads = ADS.ADS1115(i2c)
                         # 创建单端输入通道 (A0)
-                        # 修正: 使用 ADS.P0 直接引用可能会有问题，改用硬编码方式或直接导入
-                        # 正确用法通常是 ADS.P0，如果报错，可能是导入别名的问题
-                        # 尝试直接从 adafruit_ads1x15.ads1115 导入 P0
-                        from adafruit_ads1x15.ads1x15 import P0, P1, P2, P3
+                        # 修正: adafruit-circuitpython-ads1x15 库 API 变更
+                        # 正确用法是直接使用 ADS.P0 (如果导入正确)
+                        # 如果 ADS.P0 不存在，说明库结构不同，尝试最通用的方式
                         
-                        channel_map = {0: P0, 1: P1, 2: P2, 3: P3}
-                        self.mq2_analog = AnalogIn(self.ads, channel_map[Config.MQ2_ANALOG_CHANNEL])
+                        # 在最新版库中，通道是作为 AnalogIn 的参数传入的，通常是 ADS.P0
+                        # 让我们打印一下 ADS 的属性看看
+                        # logging.info(dir(ADS)) 
+                        
+                        # 尝试直接使用 ADS.P0 (假设上面的 import adafruit_ads1x15.ads1115 as ADS 生效)
+                        # 注意：上面的 import 是 import adafruit_ads1x15.ads1115 as ADS
+                        # 在这个模块里，P0 是存在的
+                        
+                        self.mq2_analog = AnalogIn(self.ads, getattr(ADS, f'P{Config.MQ2_ANALOG_CHANNEL}'))
                         logging.info("ADS1115 ADC 初始化成功")
+                    except AttributeError:
+                        # 如果 ADS.P0 真的没有，尝试从 analog_in 构造
+                        # 有些版本可能不需要 P0 常量，而是直接传数字？不，AnalogIn 需要 Pin 对象
+                        logging.warning("ADS 模块缺少 P0 属性，尝试备用方案...")
+                        # 备用方案：手动查找 Pin 类? 不太可能。
+                        # 让我们试回最原始的 import 方式，可能是命名空间污染
+                        import adafruit_ads1x15.ads1115 as ADS1115_Module
+                        self.mq2_analog = AnalogIn(self.ads, getattr(ADS1115_Module, f'P{Config.MQ2_ANALOG_CHANNEL}'))
+                        logging.info("ADS1115 ADC 初始化成功 (备用方案)")
                     except Exception as e:
                         logging.error(f"ADS1115 初始化失败: {e}")
                 

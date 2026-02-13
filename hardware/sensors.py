@@ -37,8 +37,13 @@ class SensorManager:
                         i2c = busio.I2C(board.SCL, board.SDA)
                         self.ads = ADS.ADS1115(i2c)
                         # 创建单端输入通道 (A0)
-                        # 修正: adafruit_ads1x15 库中，通道定义在 ADS1115 类中 (如 ADS.P0)
-                        self.mq2_analog = AnalogIn(self.ads, getattr(ADS, f'P{Config.MQ2_ANALOG_CHANNEL}'))
+                        # 修正: 使用 ADS.P0 直接引用可能会有问题，改用硬编码方式或直接导入
+                        # 正确用法通常是 ADS.P0，如果报错，可能是导入别名的问题
+                        # 尝试直接从 adafruit_ads1x15.ads1115 导入 P0
+                        from adafruit_ads1x15.ads1x15 import P0, P1, P2, P3
+                        
+                        channel_map = {0: P0, 1: P1, 2: P2, 3: P3}
+                        self.mq2_analog = AnalogIn(self.ads, channel_map[Config.MQ2_ANALOG_CHANNEL])
                         logging.info("ADS1115 ADC 初始化成功")
                     except Exception as e:
                         logging.error(f"ADS1115 初始化失败: {e}")

@@ -113,8 +113,23 @@
             <div
               class="bg-gray-800 p-4 rounded-xl border border-gray-700 col-span-2"
             >
-              <div class="text-gray-400 text-sm mb-1">烟雾探测 (MQ-2)</div>
+              <div class="text-gray-400 text-sm mb-1 flex justify-between">
+                <span>烟雾探测 (MQ-2)</span>
+                <span class="text-xs text-gray-500"
+                  >模拟值: <span id="mq2-analog">0</span></span
+                >
+              </div>
               <div class="text-xl font-bold" id="smoke-val">未检测</div>
+              <!-- 简易进度条显示模拟值浓度 -->
+              <div
+                class="w-full bg-gray-700 h-2 mt-2 rounded-full overflow-hidden"
+              >
+                <div
+                  id="mq2-bar"
+                  class="bg-blue-500 h-full transition-all duration-500"
+                  style="width: 0%"
+                ></div>
+              </div>
             </div>
           </div>
 
@@ -161,6 +176,26 @@
               data.humidity.toFixed(1);
 
             const smokeEl = document.getElementById("smoke-val");
+
+            // 更新模拟值显示
+            if (data.mq2_value !== undefined) {
+              document.getElementById("mq2-analog").textContent =
+                data.mq2_value;
+              // 计算进度条 (假设最大值 26000 左右)
+              const percent = Math.min((data.mq2_value / 26000) * 100, 100);
+              const barEl = document.getElementById("mq2-bar");
+              barEl.style.width = `${percent}%`;
+
+              // 根据浓度改变进度条颜色
+              if (data.smoke_detected) {
+                barEl.className =
+                  "bg-red-500 h-full transition-all duration-500";
+              } else {
+                barEl.className =
+                  "bg-blue-500 h-full transition-all duration-500";
+              }
+            }
+
             if (data.smoke_detected) {
               smokeEl.textContent = "⚠️ 检测到烟雾";
               smokeEl.className = "text-xl font-bold text-red-500";

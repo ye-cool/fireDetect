@@ -41,16 +41,13 @@ class SensorManager:
                         # 必须从 adafruit_ads1x15.ads1x15 导入 P0 (注意是 ads1x15 不是 ads1115)
                         try:
                             from adafruit_ads1x15.ads1x15 import P0, P1, P2, P3
+                            channel_map = {0: P0, 1: P1, 2: P2, 3: P3}
+                            self.mq2_analog = AnalogIn(self.ads, channel_map[Config.MQ2_ANALOG_CHANNEL])
+                            logging.info("ADS1115 ADC 初始化成功")
                         except ImportError:
-                            # 极少数旧版本可能在这里
-                            from adafruit_ads1x15.analog_in import AnalogIn
-                            # 如果真的找不到 P0，我们就不折腾了，直接用 ADS1115 对象
-                            # 但通常上面的 import 是对的
-                            pass
-
-                        channel_map = {0: P0, 1: P1, 2: P2, 3: P3}
-                        self.mq2_analog = AnalogIn(self.ads, channel_map[Config.MQ2_ANALOG_CHANNEL])
-                        logging.info("ADS1115 ADC 初始化成功")
+                            # 如果真的导入失败，打印详细错误并禁用 ADC
+                            logging.error("无法从 adafruit_ads1x15.ads1x15 导入 P0，可能是库版本不兼容")
+                            raise
                     except Exception as e:
                         logging.error(f"ADS1115 初始化失败: {e}")
                 

@@ -5,6 +5,7 @@ pydantic
 requests
 opencv-python-headless
 adafruit-circuitpython-dht
+adafruit-circuitpython-ads1x15
 RPi.GPIO
 python-dotenv
 openai

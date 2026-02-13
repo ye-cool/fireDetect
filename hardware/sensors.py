@@ -6,17 +6,22 @@ from config import Config
 # 尝试导入硬件库，如果失败则启用模拟模式
 try:
     import board
+    import busio
     import adafruit_dht
+    import adafruit_ads1x15.ads1115 as ADS
+    from adafruit_ads1x15.analog_in import AnalogIn
     import RPi.GPIO as GPIO
     HARDWARE_AVAILABLE = True
 except (ImportError, NotImplementedError):
-    logging.warning("未检测到树莓派GPIO环境，启用传感器模拟模式")
+    logging.warning("未检测到树莓派GPIO环境或ADC库，启用传感器模拟模式")
     HARDWARE_AVAILABLE = False
 
 class SensorManager:
     def __init__(self):
         self.dht_device = None
         self.mq2_pin = Config.PIN_MQ2
+        self.ads = None
+        self.mq2_analog = None
         self._setup()
 
     def _setup(self):
@@ -24,9 +29,20 @@ class SensorManager:
         if HARDWARE_AVAILABLE:
             try:
                 # 初始化 DHT22
-                self.dht_device = adafruit_dht.DHT22(board.D4) # 对应 Config.PIN_DHT22 (BCM 4)
+                self.dht_device = adafruit_dht.DHT22(board.D4)
                 
-                # 初始化 MQ-2
+                # 初始化 ADS1115 (I2C)
+                if Config.USE_ADC:
+                    try:
+                        i2c = busio.I2C(board.SCL, board.SDA)
+                        self.ads = ADS.ADS1115(i2c)
+                        # 创建单端输入通道 (A0)
+                        self.mq2_analog = AnalogIn(self.ads, getattr(ADS, f'P{Config.MQ2_ANALOG_CHANNEL}'))
+                        logging.info("ADS1115 ADC 初始化成功")
+                    except Exception as e:
+                        logging.error(f"ADS1115 初始化失败: {e}")
+                
+                # 初始化 MQ-2 数字引脚 (作为备份或不使用)
                 GPIO.setmode(GPIO.BCM)
                 GPIO.setup(self.mq2_pin, GPIO.IN)
             except Exception as e:
@@ -34,6 +50,7 @@ class SensorManager:
                 HARDWARE_AVAILABLE = False
 
     def read_dht22(self):
+        # ... (保持不变) ...
         """读取温湿度"""
         if HARDWARE_AVAILABLE and self.dht_device:
             try:
@@ -55,21 +72,42 @@ class SensorManager:
             return round(random.uniform(20.0, 60.0), 1), round(random.uniform(30.0, 70.0), 1)
 
     def read_mq2(self):
-        """读取烟雾状态. True表示有烟雾 (假设低电平触发)"""
+        """
+        读取烟雾状态。
+        如果启用了 ADC，返回模拟电压值是否超过阈值。
+        否则返回数字引脚状态。
+        """
         if HARDWARE_AVAILABLE:
+            # 优先使用 ADC 读取模拟值
+            if Config.USE_ADC and self.mq2_analog:
+                try:
+                    value = self.mq2_analog.value
+                    # logging.debug(f"MQ-2 Analog Value: {value}")
+                    return value > Config.SMOKE_THRESHOLD_ANALOG
+                except Exception as e:
+                    logging.error(f"ADC 读取失败: {e}")
+            
+            # 降级到数字引脚读取
             try:
-                # 如果是数字输出，0通常代表检测到阈值
                 state = GPIO.input(self.mq2_pin)
                 return state == Config.SMOKE_DETECTED_VALUE
             except Exception:
                 return False
         else:
-            # 模拟偶尔检测到烟雾 (1% 概率)
-            # return random.random() > 0.99
-            # 修改：模拟模式下默认不报警，除非手动修改代码测试
+            # 模拟模式
             return False
 
+    def get_mq2_value(self):
+        """获取 MQ-2 的原始模拟值 (用于前端显示波形等)"""
+        if HARDWARE_AVAILABLE and Config.USE_ADC and self.mq2_analog:
+            try:
+                return self.mq2_analog.value
+            except:
+                return 0
+        return 0
+
     def cleanup(self):
+        # ... (保持不变) ...
         if HARDWARE_AVAILABLE:
             if self.dht_device:
                 self.dht_device.exit()

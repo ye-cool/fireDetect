@@ -6,7 +6,12 @@ load_dotenv()
 class Config:
     # 传感器引脚配置 (BCM编码)
     PIN_DHT22 = 4
-    PIN_MQ2 = 17  # MQ-2 Digital Pin
+    PIN_MQ2 = 17  # MQ-2 Digital Pin (如果使用 ADC，此引脚可作为备用或移除)
+    
+    # ADC 配置 (I2C)
+    USE_ADC = True  # 是否使用 ADS1115 读取模拟值
+    MQ2_ANALOG_CHANNEL = 0 # ADS1115 的 A0 通道
+    SMOKE_THRESHOLD_ANALOG = 15000 # 模拟值阈值 (0-32767)，需校准
     
     # 摄像头ID
     CAMERA_ID = 0

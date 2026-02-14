@@ -42,6 +42,19 @@ async def get_status():
     return JSONResponse(content=fusion_system.get_state(), headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/llm")
+async def llm_info():
+    state = fusion_system.get_state()
+    return JSONResponse(
+        content={
+            "mode": state.get("llm_mode"),
+            "model": state.get("llm_model"),
+            "use_image": state.get("llm_use_image"),
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.post("/api/analyze")
 async def analyze_now():
     started = fusion_system.trigger_llm_analysis(trigger="manual")

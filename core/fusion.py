@@ -35,6 +35,7 @@ class DataFusionSystem:
         self.last_analysis_error = ""
         self.last_analysis_trigger = ""
         self.last_analysis_request_id = 0
+        self.last_analysis_duration_ms = 0
         self.detector = None
         self.last_vision_time = 0
 
@@ -78,7 +79,11 @@ class DataFusionSystem:
                 "vision_detections": self.state.vision_detections,
                 "risk_level": self.state.fire_risk_level,
                 "llm_analysis": self.state.llm_analysis_result,
+                "llm_mode": Config.LLM_MODE,
+                "llm_model": getattr(self.llm, "model", ""),
+                "llm_use_image": bool(getattr(Config, "LLM_USE_IMAGE", False)),
                 "llm_last_time": self.last_analysis_time,
+                "llm_last_duration_ms": self.last_analysis_duration_ms,
                 "llm_last_error": self.last_analysis_error,
                 "llm_in_progress": self._analysis_in_progress,
                 "llm_last_trigger": self.last_analysis_trigger,
@@ -198,6 +203,7 @@ class DataFusionSystem:
         return True
 
     def _run_llm_analysis(self, request_id: int):
+        started = time.time()
         try:
             with self._lock:
                 temperature = self.state.temperature
@@ -223,5 +229,6 @@ class DataFusionSystem:
         except Exception as e:
             self.last_analysis_error = str(e)
         finally:
+            self.last_analysis_duration_ms = int((time.time() - started) * 1000)
             with self._analysis_lock:
                 self._analysis_in_progress = False

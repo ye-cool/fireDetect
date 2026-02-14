@@ -312,8 +312,14 @@
               const err = data.llm_last_error
                 ? "错误: " + data.llm_last_error
                 : "";
+              const model = data.llm_model ? String(data.llm_model) : "-";
+              const useImg = data.llm_use_image ? "image" : "text";
+              const dur =
+                typeof data.llm_last_duration_ms === "number"
+                  ? `${data.llm_last_duration_ms}ms`
+                  : "";
               aiMetaEl.textContent =
-                `request_id: ${reqId}  trigger: ${trig}  ${err}`.trim();
+                `model: ${model} (${useImg})  ${dur}  request_id: ${reqId}  trigger: ${trig}  ${err}`.trim();
             }
             try {
               const aiJson = JSON.parse(data.llm_analysis);

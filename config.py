@@ -48,8 +48,12 @@ class Config:
     # 安装: curl -fsSL https://ollama.com/install.sh | sh
     # 拉取模型: ollama pull moondream
     LLM_LOCAL_URL = "http://localhost:11434/v1"
-    LLM_MODEL_LOCAL = "moondream" # 或 "llava:7b" (树莓派上较慢), "llava-phi3"
+    LLM_MODEL_LOCAL = "moondream" # 仅在 LLM_USE_IMAGE=True 时使用
+    LLM_MODEL_LOCAL_TEXT = os.getenv("LLM_MODEL_LOCAL_TEXT", "qwen2.5:1.5b")
     LLM_TIMEOUT_SECONDS = 120
     LLM_IMAGE_MAX_SIDE = 384
     LLM_IMAGE_JPEG_QUALITY = 55
     LLM_USE_IMAGE = False
+    LLM_MAX_TOKENS = 120
+    LLM_TEMPERATURE = 0.0
+    LLM_TOP_P = 0.3

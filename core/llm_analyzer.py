@@ -73,6 +73,64 @@ class FireLLMAnalyzer:
             ensure_ascii=False,
         )
 
+    def _is_json_like(self, s: str) -> bool:
+        if not s:
+            return False
+        t = s.strip()
+        if t.startswith("{") or t.startswith("["):
+            return True
+        if "\"temperature_c\"" in t or "temperature_c" in t or "humidity_pct" in t:
+            return True
+        return False
+
+    def _fallback_result_cn(self, rule_risk: str, temperature, humidity, smoke_detected, mq2_value, vision_fire_detected, vision_detections) -> str:
+        parts = []
+        if temperature is None:
+            parts.append("温度未知")
+        else:
+            parts.append(f"温度{temperature}℃")
+
+        if humidity is None:
+            parts.append("湿度未知")
+        else:
+            parts.append(f"湿度{humidity}%")
+
+        if smoke_detected is True:
+            parts.append("烟雾报警触发")
+        elif smoke_detected is False:
+            parts.append("烟雾报警未触发")
+        else:
+            parts.append("烟雾状态未知")
+
+        if mq2_value is None:
+            parts.append("MQ2未知")
+        else:
+            parts.append(f"MQ2={mq2_value}")
+
+        if vision_fire_detected is True:
+            parts.append("视觉检测到火焰")
+        elif vision_fire_detected is False:
+            det_n = len(vision_detections) if isinstance(vision_detections, list) else 0
+            parts.append(f"视觉未检测到火焰(目标{det_n}个)")
+        else:
+            parts.append("视觉状态未知")
+
+        if rule_risk == "Danger":
+            suggestion = "建议立即确认现场情况，优先断电断气并准备灭火器；如有明火/浓烟请立刻撤离并拨打119。"
+        elif rule_risk == "Warning":
+            suggestion = "建议提高警惕，检查可疑热源/烟雾来源，保持通风并持续观察。"
+        else:
+            suggestion = "建议继续保持监测，注意通风与用电用火安全。"
+
+        return json.dumps(
+            {
+                "risk_level": rule_risk,
+                "description": "；".join(parts) + "。",
+                "suggestion": suggestion,
+            },
+            ensure_ascii=False,
+        )
+
     def _rule_risk(self, temperature, humidity, smoke_detected, mq2_value, vision_fire_detected) -> str:
         if vision_fire_detected is True:
             return "Danger"
@@ -215,10 +273,36 @@ class FireLLMAnalyzer:
                 timeout=Config.LLM_TIMEOUT_SECONDS,
                 extra_body=extra_body,
             )
-            return self._normalize_json(response.choices[0].message.content, fallback_risk=rule_risk)
+            normalized = self._normalize_json(response.choices[0].message.content, fallback_risk=rule_risk)
+            try:
+                obj = json.loads(normalized)
+            except Exception:
+                return self._fallback_result_cn(rule_risk, temperature, humidity, smoke_detected, mq2_value, vision_fire_detected, vision_detections)
+
+            if not isinstance(obj, dict):
+                return self._fallback_result_cn(rule_risk, temperature, humidity, smoke_detected, mq2_value, vision_fire_detected, vision_detections)
+
+            if obj.get("risk_level") != rule_risk:
+                obj["risk_level"] = rule_risk
+
+            desc = obj.get("description")
+            sug = obj.get("suggestion")
+            if not isinstance(desc, str) or self._is_json_like(desc):
+                obj["description"] = json.loads(self._fallback_result_cn(rule_risk, temperature, humidity, smoke_detected, mq2_value, vision_fire_detected, vision_detections)).get("description", "")
+            if not isinstance(sug, str) or self._is_json_like(sug):
+                obj["suggestion"] = json.loads(self._fallback_result_cn(rule_risk, temperature, humidity, smoke_detected, mq2_value, vision_fire_detected, vision_detections)).get("suggestion", "")
+
+            return json.dumps(
+                {
+                    "risk_level": obj.get("risk_level", rule_risk),
+                    "description": obj.get("description", ""),
+                    "suggestion": obj.get("suggestion", ""),
+                },
+                ensure_ascii=False,
+            )
         except Exception as e:
             logging.error(f"LLM分析失败: {e}")
-            return self._normalize_json(f"智能分析服务暂时不可用 ({str(e)})", fallback_risk=rule_risk)
+            return self._fallback_result_cn(rule_risk, temperature, humidity, smoke_detected, mq2_value, vision_fire_detected, vision_detections)
 
     def analyze(self, temperature, humidity, smoke_detected, image, mq2_value=None, vision_fire_detected=None, vision_detections=None):
         """调用大模型进行分析"""

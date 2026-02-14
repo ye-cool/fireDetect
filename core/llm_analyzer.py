@@ -138,18 +138,24 @@ class FireLLMAnalyzer:
                     }
                 )
 
-        if getattr(Config, "LLM_SKIP_ON_NORMAL", False) and rule_risk == "Normal":
-            return self._normalize_json(
-                json.dumps(
-                    {
-                        "risk_level": "Normal",
-                        "description": "传感器与视觉检测均未发现异常。",
-                        "suggestion": "继续保持监测，注意通风与用电用火安全。",
-                    },
-                    ensure_ascii=False,
-                ),
-                fallback_risk="Normal",
+        try:
+            temp_over = temperature is not None and float(temperature) > float(getattr(Config, "TEMP_THRESHOLD", 50.0))
+        except Exception:
+            temp_over = None
+
+        try:
+            hum_low = humidity is not None and float(humidity) < float(getattr(Config, "HUMIDITY_THRESHOLD", 20.0))
+        except Exception:
+            hum_low = None
+
+        try:
+            mq2_over = (
+                getattr(Config, "USE_ADC", False)
+                and mq2_value is not None
+                and float(mq2_value) > float(getattr(Config, "SMOKE_THRESHOLD_ANALOG", 15000))
             )
+        except Exception:
+            mq2_over = None
 
         context = {
             "temperature_c": temperature,
@@ -157,6 +163,9 @@ class FireLLMAnalyzer:
             "smoke_digital": smoke_detected,
             "mq2_analog": mq2_value,
             "mq2_threshold": getattr(Config, "SMOKE_THRESHOLD_ANALOG", None) if getattr(Config, "USE_ADC", False) else None,
+            "temp_over_threshold": temp_over,
+            "humidity_low": hum_low,
+            "mq2_over_threshold": mq2_over,
             "vision_fire": vision_fire_detected,
             "detections": dets,
             "risk_level": rule_risk,
@@ -169,8 +178,9 @@ class FireLLMAnalyzer:
                 "你将收到来自传感器与YOLO的JSON数据。不得编造任何未给出的信息；"
                 "遇到null/None必须写“未知”。严格只输出JSON，不要Markdown/解释文字。"
                 "输出字段必须且仅包含：risk_level、description、suggestion。"
-                "其中risk_level必须与输入的risk_level完全一致(只能是Normal/Warning/Danger)。"
-                "description与suggestion必须使用中文。\n"
+                "risk_level必须与输入的risk_level完全一致(只能是Normal/Warning/Danger)。"
+                "description与suggestion必须使用中文。"
+                "描述中不得声称温度/湿度/烟雾/视觉“异常/触发”，除非对应的 *_over_threshold 或 smoke_digital/vision_fire 为 true。\n"
             )
         else:
             prompt_prefix = (

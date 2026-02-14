@@ -102,7 +102,8 @@ class DataFusionSystem:
                 self.trigger_llm_analysis(trigger=f"auto:{current_risk}")
             elif current_risk == "Normal":
                 with self._lock:
-                    self.state.llm_analysis_result = "系统运行正常"
+                    if self.state.fire_risk_level != "Normal" and not self._analysis_in_progress:
+                        self.state.llm_analysis_result = "系统运行正常"
 
 
             with self._lock:

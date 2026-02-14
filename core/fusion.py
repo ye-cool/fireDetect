@@ -17,6 +17,9 @@ class SystemState:
         self.fire_risk_level = "Normal" # Normal, Warning, Danger
         self.llm_analysis_result = ""
         self.latest_frame = None
+        self.vision_detections = None
+        self.vision_fire_detected = None
+        self.vision_last_time = 0
 
 class DataFusionSystem:
     def __init__(self):
@@ -32,6 +35,23 @@ class DataFusionSystem:
         self.last_analysis_error = ""
         self.last_analysis_trigger = ""
         self.last_analysis_request_id = 0
+        self.detector = None
+        self.last_vision_time = 0
+
+        try:
+            from vision.yolo_onnx import YoloOnnxDetector
+
+            if Config.USE_YOLO:
+                detector = YoloOnnxDetector(
+                    model_path=Config.YOLO_MODEL_PATH,
+                    class_names=list(Config.YOLO_CLASSES),
+                    input_size=Config.YOLO_INPUT_SIZE,
+                    conf_threshold=Config.YOLO_CONF_THRESHOLD,
+                    iou_threshold=Config.YOLO_IOU_THRESHOLD,
+                )
+                self.detector = detector if detector.is_ready() else None
+        except Exception:
+            self.detector = None
         
     def start(self):
         self.running = True
@@ -54,6 +74,8 @@ class DataFusionSystem:
                 "humidity": self.state.humidity,
                 "smoke_detected": self.state.smoke_detected,
                 "mq2_value": self.state.mq2_value, # 暴露给前端
+                "vision_fire_detected": self.state.vision_fire_detected,
+                "vision_detections": self.state.vision_detections,
                 "risk_level": self.state.fire_risk_level,
                 "llm_analysis": self.state.llm_analysis_result,
                 "llm_last_time": self.last_analysis_time,
@@ -63,6 +85,10 @@ class DataFusionSystem:
                 "llm_last_request_id": self.last_analysis_request_id,
                 "timestamp": self.state.last_update
             }
+
+    def get_latest_detections(self):
+        with self._lock:
+            return self.state.vision_detections
 
     def get_latest_frame(self):
         with self._lock:
@@ -85,9 +111,45 @@ class DataFusionSystem:
                 self.state.latest_frame = frame
                 self.state.last_update = time.time()
 
+            now = time.time()
+            if (
+                self.detector
+                and frame is not None
+                and (now - self.last_vision_time) >= Config.YOLO_INFER_INTERVAL_SECONDS
+            ):
+                self.last_vision_time = now
+                try:
+                    detections = self.detector.detect(frame)
+                except Exception:
+                    detections = None
+
+                with self._lock:
+                    if detections is None:
+                        self.state.vision_detections = None
+                        self.state.vision_fire_detected = None
+                    else:
+                        self.state.vision_detections = [
+                            {
+                                "label": d.label,
+                                "confidence": d.confidence,
+                                "x1": d.x1,
+                                "y1": d.y1,
+                                "x2": d.x2,
+                                "y2": d.y2,
+                            }
+                            for d in detections
+                        ]
+                        self.state.vision_fire_detected = any(
+                            (d["label"] or "").lower() in ("fire", "flame")
+                            for d in self.state.vision_detections
+                        )
+                        self.state.vision_last_time = now
+
             # 2. 规则引擎初步判定 (边缘计算层)
             risk = "Normal"
-            if self.state.smoke_detected is True:
+            if self.state.vision_fire_detected is True:
+                risk = "Danger"
+            elif self.state.smoke_detected is True:
                 risk = "Danger"
             elif self.state.temperature is not None and self.state.temperature > Config.TEMP_THRESHOLD:
                 risk = "Warning"
@@ -138,8 +200,19 @@ class DataFusionSystem:
                 humidity = self.state.humidity
                 smoke_detected = self.state.smoke_detected
                 frame = self.state.latest_frame
+                mq2_value = self.state.mq2_value
+                vision_fire_detected = self.state.vision_fire_detected
+                vision_detections = self.state.vision_detections
 
-            analysis = self.llm.analyze(temperature, humidity, smoke_detected, frame)
+            analysis = self.llm.analyze(
+                temperature,
+                humidity,
+                smoke_detected,
+                frame,
+                mq2_value=mq2_value,
+                vision_fire_detected=vision_fire_detected,
+                vision_detections=vision_detections,
+            )
             with self._lock:
                 self.state.llm_analysis_result = analysis
             self.last_analysis_error = ""

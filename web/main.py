@@ -71,6 +71,33 @@ def generate_frames():
             import numpy as np
             frame = np.zeros((480, 640, 3), dtype=np.uint8)
             cv2.putText(frame, "No Camera Signal", (200, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        else:
+            detections = fusion_system.get_latest_detections()
+            if isinstance(detections, list) and detections:
+                frame = frame.copy()
+                for d in detections[:20]:
+                    try:
+                        x1 = int(d.get("x1"))
+                        y1 = int(d.get("y1"))
+                        x2 = int(d.get("x2"))
+                        y2 = int(d.get("y2"))
+                        label = str(d.get("label", ""))
+                        conf = float(d.get("confidence", 0))
+                    except Exception:
+                        continue
+
+                    color = (0, 0, 255) if label.lower() in ("fire", "flame") else (255, 128, 0)
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                    cv2.putText(
+                        frame,
+                        f"{label} {conf:.2f}",
+                        (x1, max(0, y1 - 6)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        color,
+                        1,
+                        cv2.LINE_AA,
+                    )
 
         ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
         if ret:

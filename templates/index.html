@@ -120,6 +120,9 @@
                 >
               </div>
               <div class="text-xl font-bold" id="smoke-val">未检测</div>
+              <div class="text-xs text-gray-400 mt-1">
+                视觉检测: <span id="vision-val">--</span>
+              </div>
               <!-- 简易进度条显示模拟值浓度 -->
               <div
                 class="w-full bg-gray-700 h-2 mt-2 rounded-full overflow-hidden"
@@ -139,20 +142,20 @@
           >
             <div class="flex items-center justify-between mb-2">
               <h3 class="font-semibold text-purple-400 flex items-center">
-              <svg
-                class="w-5 h-5 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                ></path>
-              </svg>
-              大模型智能分析
+                <svg
+                  class="w-5 h-5 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  ></path>
+                </svg>
+                大模型智能分析
               </h3>
               <button
                 id="analyze-btn"
@@ -216,7 +219,8 @@
               if (mq2Val === null) {
                 document.getElementById("mq2-analog").textContent = "获取失败";
                 barEl.style.width = "0%";
-                barEl.className = "bg-gray-500 h-full transition-all duration-500";
+                barEl.className =
+                  "bg-gray-500 h-full transition-all duration-500";
               } else {
                 document.getElementById("mq2-analog").textContent = mq2Val;
                 const percent =
@@ -241,6 +245,23 @@
               smokeEl.className = "text-xl font-bold text-green-500";
             }
 
+            const visionEl = document.getElementById("vision-val");
+            if (visionEl) {
+              if (
+                data.vision_fire_detected === null ||
+                data.vision_fire_detected === undefined
+              ) {
+                visionEl.textContent = "未启用/无数据";
+              } else if (data.vision_fire_detected) {
+                visionEl.textContent = "⚠️ 火焰";
+              } else {
+                const n = Array.isArray(data.vision_detections)
+                  ? data.vision_detections.length
+                  : 0;
+                visionEl.textContent = n > 0 ? `目标:${n}` : "无";
+              }
+            }
+
             const riskEl = document.getElementById("risk-display");
             riskEl.textContent = (data.risk_level || "normal").toUpperCase();
             riskEl.className =
@@ -252,13 +273,18 @@
             const analyzeBtn = document.getElementById("analyze-btn");
             if (analyzeBtn) {
               analyzeBtn.disabled = !!data.llm_in_progress;
-              analyzeBtn.textContent = data.llm_in_progress ? "分析中..." : "立即分析";
+              analyzeBtn.textContent = data.llm_in_progress
+                ? "分析中..."
+                : "立即分析";
             }
             if (aiMetaEl) {
               const reqId = data.llm_last_request_id ?? "-";
               const trig = data.llm_last_trigger ?? "-";
-              const err = data.llm_last_error ? `错误: ${data.llm_last_error}` : "";
-              aiMetaEl.textContent = `request_id: ${reqId}  trigger: ${trig}  ${err}`.trim();
+              const err = data.llm_last_error
+                ? `错误: ${data.llm_last_error}`
+                : "";
+              aiMetaEl.textContent =
+                `request_id: ${reqId}  trigger: ${trig}  ${err}`.trim();
             }
             try {
               const aiJson = JSON.parse(data.llm_analysis);

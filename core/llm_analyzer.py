@@ -41,14 +41,70 @@ class FireLLMAnalyzer:
         _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
         return base64.b64encode(buffer).decode('utf-8')
 
-    def analyze(self, temperature, humidity, smoke_detected, image):
-        """
-        调用大模型进行多模态分析
-        """
+    def analyze_summary(self, temperature, humidity, smoke_detected, mq2_value, vision_fire_detected, vision_detections):
+        if Config.LLM_MODE == "cloud" and not Config.LLM_API_KEY:
+            logging.warning("未配置 LLM API Key，跳过大模型分析")
+            return "未配置大模型，仅依据规则引擎报警"
+
+        vision_text = "无"
+        if isinstance(vision_detections, list) and vision_detections:
+            vision_text = ", ".join(
+                [
+                    f"{d.get('label')}({float(d.get('confidence', 0)):.2f})"
+                    for d in vision_detections[:6]
+                ]
+            )
+
+        prompt = f"""
+你是家庭火灾安全专家。请根据边缘端融合后的结构化信息，输出最终风险评估和建议。
+
+【传感器】
+- 温度: {temperature}
+- 湿度: {humidity}
+- 烟雾(阈值判定): {smoke_detected}
+- MQ-2 模拟值: {mq2_value}
+
+【视觉(YOLO)】
+- 视觉火焰判定: {vision_fire_detected}
+- 目标列表: {vision_text}
+
+【要求】
+1) 给出风险等级: Normal/Warning/Danger
+2) 说明判断依据（简短）
+3) 给出行动建议（简短，可执行）
+
+仅以 JSON 返回，字段: risk_level, description, suggestion。
+"""
+
+        try:
+            logging.info(f"正在调用大模型 ({self.model})...")
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+                timeout=Config.LLM_TIMEOUT_SECONDS,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            logging.error(f"LLM分析失败: {e}")
+            return f"智能分析服务暂时不可用 ({str(e)})"
+
+    def analyze(self, temperature, humidity, smoke_detected, image, mq2_value=None, vision_fire_detected=None, vision_detections=None):
+        """调用大模型进行分析"""
         # 云端模式下如果没有Key则跳过
         if Config.LLM_MODE == "cloud" and not Config.LLM_API_KEY:
             logging.warning("未配置 LLM API Key，跳过大模型分析")
             return "未配置大模型，仅依据传感器数据报警"
+
+        if not getattr(Config, "LLM_USE_IMAGE", False):
+            return self.analyze_summary(
+                temperature=temperature,
+                humidity=humidity,
+                smoke_detected=smoke_detected,
+                mq2_value=mq2_value,
+                vision_fire_detected=vision_fire_detected,
+                vision_detections=vision_detections,
+            )
 
         base64_image = self.encode_image(image)
         if not base64_image:

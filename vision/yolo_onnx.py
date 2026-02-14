@@ -91,38 +91,66 @@ class YoloOnnxDetector:
         if preds.ndim == 3:
             preds = np.squeeze(preds, axis=0)
 
-        if preds.ndim == 2 and preds.shape[0] < preds.shape[1]:
-            data = preds
-        elif preds.ndim == 2:
+        if preds.ndim != 2:
+            return []
+
+        feature_dim, box_dim = preds.shape
+        if feature_dim < box_dim:
             data = preds.T
         else:
-            return []
+            data = preds
 
         num_cols = data.shape[1]
         if num_cols < 6:
             return []
+
+        class_count = max(1, len(self.class_names))
+        has_objectness = (num_cols - 5) == class_count
 
         boxes: List[List[int]] = []
         scores: List[float] = []
         class_ids: List[int] = []
 
         for row in data:
-            x, y, bw, bh = row[0], row[1], row[2], row[3]
+            x, y, bw, bh = float(row[0]), float(row[1]), float(row[2]), float(row[3])
             if num_cols == 6:
                 conf = float(row[4])
                 cls = int(row[5])
             else:
-                cls_scores = row[4:]
-                cls = int(np.argmax(cls_scores))
-                conf = float(cls_scores[cls])
+                if has_objectness:
+                    obj = float(row[4])
+                    cls_scores = row[5:]
+                    cls = int(np.argmax(cls_scores))
+                    conf = obj * float(cls_scores[cls])
+                else:
+                    cls_scores = row[4:]
+                    cls = int(np.argmax(cls_scores))
+                    conf = float(cls_scores[cls])
+
+            if conf > 1.0 and conf <= 100.0:
+                conf = conf / 100.0
 
             if conf < self.conf_threshold:
                 continue
 
-            x1 = int((x - bw / 2) * w / self.input_size)
-            y1 = int((y - bh / 2) * h / self.input_size)
-            x2 = int((x + bw / 2) * w / self.input_size)
-            y2 = int((y + bh / 2) * h / self.input_size)
+            max_box_val = max(abs(x), abs(y), abs(bw), abs(bh))
+            if max_box_val <= 1.5:
+                cx = x * w
+                cy = y * h
+                ww = bw * w
+                hh = bh * h
+            elif max_box_val <= self.input_size * 1.5:
+                cx = x * (w / self.input_size)
+                cy = y * (h / self.input_size)
+                ww = bw * (w / self.input_size)
+                hh = bh * (h / self.input_size)
+            else:
+                cx, cy, ww, hh = x, y, bw, bh
+
+            x1 = int(cx - ww / 2)
+            y1 = int(cy - hh / 2)
+            x2 = int(cx + ww / 2)
+            y2 = int(cy + hh / 2)
 
             x1 = max(0, min(w - 1, x1))
             y1 = max(0, min(h - 1, y1))

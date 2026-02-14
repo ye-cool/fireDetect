@@ -57,14 +57,16 @@ class FireLLMAnalyzer:
         except Exception:
             pass
 
-        m = re.search(r"\{[\s\S]*\}", s)
-        if m:
+        candidates = re.findall(r"\{[\s\S]*?\}", s)
+        for raw in reversed(candidates):
             try:
-                parsed = json.loads(m.group(0))
-                if isinstance(parsed, dict):
-                    return json.dumps(_ensure(parsed), ensure_ascii=False)
+                parsed = json.loads(raw)
             except Exception:
-                pass
+                continue
+            if not isinstance(parsed, dict):
+                continue
+            if any(k in parsed for k in ("risk_level", "description", "suggestion")):
+                return json.dumps(_ensure(parsed), ensure_ascii=False)
 
         return json.dumps(
             _ensure({"description": s, "suggestion": "请结合现场情况核验。"}),

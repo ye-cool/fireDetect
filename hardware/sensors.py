@@ -28,12 +28,17 @@ class SensorManager:
             return
 
         try:
-            self.dht_device = adafruit_dht.DHT22(board.D4)
+            dht_bcm = int(getattr(Config, "PIN_DHT22", 4))
+            dht_pin = getattr(board, f"D{dht_bcm}")
+            self.dht_device = adafruit_dht.DHT22(dht_pin)
             self._dht_ok = True
         except Exception as e:
             self.dht_device = None
             self._dht_ok = False
-            logging.error(f"DHT22 初始化失败: {e}")
+            logging.error(
+                "DHT22 初始化失败: %s (常见原因: GPIO%d 被 1-Wire 占用、权限不足、接线/上拉电阻问题)"
+                % (e, int(getattr(Config, "PIN_DHT22", 4)))
+            )
 
         try:
             GPIO.setmode(GPIO.BCM)

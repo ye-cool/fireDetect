@@ -138,6 +138,19 @@ class FireLLMAnalyzer:
                     }
                 )
 
+        if getattr(Config, "LLM_SKIP_ON_NORMAL", False) and rule_risk == "Normal":
+            return self._normalize_json(
+                json.dumps(
+                    {
+                        "risk_level": "Normal",
+                        "description": "传感器与视觉检测均未发现异常。",
+                        "suggestion": "继续保持监测，注意通风与用电用火安全。",
+                    },
+                    ensure_ascii=False,
+                ),
+                fallback_risk="Normal",
+            )
+
         context = {
             "temperature_c": temperature,
             "humidity_pct": humidity,
@@ -151,13 +164,22 @@ class FireLLMAnalyzer:
             "humidity_threshold": getattr(Config, "HUMIDITY_THRESHOLD", 20.0),
         }
 
-        prompt = (
-            "You will be given JSON data from sensors and YOLO. "
-            "Do NOT invent values. If a field is null/None, say 'unavailable'. "
-            "Output ONLY JSON with keys risk_level, description, suggestion. "
-            "risk_level MUST equal input.risk_level.\n"
-            + json.dumps(context, ensure_ascii=False, separators=(",", ":"))
-        )
+        if getattr(Config, "LLM_FORCE_CHINESE", True):
+            prompt_prefix = (
+                "你将收到来自传感器与YOLO的JSON数据。不得编造任何未给出的信息；"
+                "遇到null/None必须写“未知”。严格只输出JSON，不要Markdown/解释文字。"
+                "输出字段必须且仅包含：risk_level、description、suggestion。"
+                "其中risk_level必须与输入的risk_level完全一致(只能是Normal/Warning/Danger)。"
+                "description与suggestion必须使用中文。\n"
+            )
+        else:
+            prompt_prefix = (
+                "You will be given JSON data from sensors and YOLO. Do NOT invent values. "
+                "If a field is null/None, say 'unavailable'. Output ONLY JSON with keys risk_level, description, suggestion. "
+                "risk_level MUST equal input.risk_level.\n"
+            )
+
+        prompt = prompt_prefix + json.dumps(context, ensure_ascii=False, separators=(",", ":"))
 
         try:
             logging.info(f"正在调用大模型 ({self.model})...")

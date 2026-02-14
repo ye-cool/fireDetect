@@ -351,9 +351,18 @@
                 aiEl.textContent = data.llm_analysis || "暂无分析数据";
                 return;
               }
+
+              const riskZh =
+                String(riskLevel) === "Danger"
+                  ? "危险"
+                  : String(riskLevel) === "Warning"
+                  ? "可疑"
+                  : String(riskLevel) === "Normal"
+                  ? "正常"
+                  : String(riskLevel);
               aiEl.innerHTML =
                 '<p class="mb-1"><strong class="text-white">风险评估:</strong> ' +
-                String(riskLevel) +
+                riskZh +
                 "</p>" +
                 '<p class="mb-1"><strong class="text-white">描述:</strong> ' +
                 String(description) +

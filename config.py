@@ -50,11 +50,13 @@ class Config:
     LLM_LOCAL_URL = "http://localhost:11434/v1"
     LLM_MODEL_LOCAL = "moondream" # 仅在 LLM_USE_IMAGE=True 时使用
     LLM_MODEL_LOCAL_TEXT = os.getenv("LLM_MODEL_LOCAL_TEXT", "qwen2.5:1.5b")
-    LLM_TIMEOUT_SECONDS = 120
+    LLM_TIMEOUT_SECONDS = 60
     LLM_IMAGE_MAX_SIDE = 384
     LLM_IMAGE_JPEG_QUALITY = 55
     LLM_USE_IMAGE = False
-    LLM_MAX_TOKENS = 80
+    LLM_MAX_TOKENS = 60
     LLM_TEMPERATURE = 0.0
     LLM_TOP_P = 0.2
-    LLM_NUM_CTX = 512
+    LLM_NUM_CTX = 384
+    LLM_SKIP_ON_NORMAL = True
+    LLM_FORCE_CHINESE = True

@@ -1,6 +1,7 @@
 import cv2
 import time
 import logging
+import threading
 from config import Config
 
 class CameraDriver:
@@ -8,9 +9,14 @@ class CameraDriver:
         self.camera_id = Config.CAMERA_ID
         self.cap = None
         self.is_open = False
+        self._running = False
+        self._thread = None
+        self._lock = threading.Lock()
+        self._latest_frame = None
 
     def start(self):
         try:
+            self.release()
             # 优先尝试 Libcamera (树莓派 CSI 摄像头)
             # 在 OpenCV 中，通常使用 gstreamer 管道或者特定的 backend 来调用 libcamera
             # 但最简单的方法是尝试 index 0，如果树莓派 OS 配置正确 (dtoverlay=imx219等)，OpenCV 也能读取
@@ -43,21 +49,42 @@ class CameraDriver:
                 self.cap.set(cv2.CAP_PROP_FPS, 15)
                 # 设置缓冲区大小，减少延迟
                 self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                self._running = True
+                self._thread = threading.Thread(target=self._capture_loop, daemon=True)
+                self._thread.start()
         except Exception as e:
             logging.error(f"摄像头初始化失败: {e}")
             self.is_open = False
 
+    def _capture_loop(self):
+        while self._running and self.cap and self.cap.isOpened():
+            ret, frame = self.cap.read()
+            if ret:
+                with self._lock:
+                    self._latest_frame = frame
+            else:
+                time.sleep(0.01)
+
     def get_frame(self):
         """获取当前帧，如果摄像头未打开则返回None或黑图"""
         if self.is_open and self.cap:
-            ret, frame = self.cap.read()
-            if ret:
-                return frame
+            with self._lock:
+                return self._latest_frame
         
         # 模拟模式：如果没有摄像头，返回None，业务层处理
         return None
 
     def release(self):
+        self._running = False
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=1)
+        self._thread = None
         if self.cap:
-            self.cap.release()
-            self.is_open = False
+            try:
+                self.cap.release()
+            except Exception:
+                pass
+        self.cap = None
+        self.is_open = False
+        with self._lock:
+            self._latest_frame = None

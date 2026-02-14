@@ -30,7 +30,7 @@ class SensorManager:
         try:
             dht_bcm = int(getattr(Config, "PIN_DHT22", 4))
             dht_pin = getattr(board, f"D{dht_bcm}")
-            self.dht_device = adafruit_dht.DHT22(dht_pin)
+            self.dht_device = adafruit_dht.DHT22(dht_pin, use_pulseio=False)
             self._dht_ok = True
         except Exception as e:
             self.dht_device = None
@@ -102,23 +102,23 @@ class SensorManager:
     def read_dht22(self):
         """读取温湿度"""
         if _LIBS_AVAILABLE and self._dht_ok and self.dht_device:
-            try:
-                temperature = self.dht_device.temperature
-                humidity = self.dht_device.humidity
-                if temperature is None or humidity is None:
-                    # 硬件读取偶尔会失败，返回None
-                    return None, None
-                return temperature, humidity
-            except RuntimeError as error:
-                # DHT读取频率过快经常会报错，这是正常的
-                # logging.debug(f"DHT读取错误: {error.args[0]}")
-                return None, None
-            except Exception as error:
+            for _ in range(3):
                 try:
-                    self.dht_device.exit()
+                    temperature = self.dht_device.temperature
+                    humidity = self.dht_device.humidity
+                    if temperature is None or humidity is None:
+                        return None, None
+                    return temperature, humidity
+                except RuntimeError:
+                    time.sleep(0.2)
+                    continue
                 except Exception:
-                    pass
-                return None, None
+                    try:
+                        self.dht_device.exit()
+                    except Exception:
+                        pass
+                    self._dht_ok = False
+                    return None, None
         return None, None
 
     def read_mq2(self):

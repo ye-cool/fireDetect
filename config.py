@@ -17,6 +17,15 @@ class Config:
     
     # 摄像头ID
     CAMERA_ID = 0
+
+    # YOLO 视觉检测配置 (ONNX + OpenCV DNN)
+    USE_YOLO = True
+    YOLO_MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "models/fire_yolo.onnx")
+    YOLO_CLASSES = ["fire", "smoke"]
+    YOLO_INPUT_SIZE = 320
+    YOLO_CONF_THRESHOLD = 0.4
+    YOLO_IOU_THRESHOLD = 0.45
+    YOLO_INFER_INTERVAL_SECONDS = 0.5
     
     # 阈值设置
     TEMP_THRESHOLD = 50.0  # 摄氏度
@@ -41,3 +50,4 @@ class Config:
     LLM_TIMEOUT_SECONDS = 120
     LLM_IMAGE_MAX_SIDE = 384
     LLM_IMAGE_JPEG_QUALITY = 55
+    LLM_USE_IMAGE = False

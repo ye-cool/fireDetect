@@ -172,6 +172,13 @@ class DataFusionSystem:
                 risk = "Danger"
             elif self.state.temperature is not None and self.state.temperature > Config.TEMP_THRESHOLD:
                 risk = "Warning"
+            elif (
+                self.state.humidity is not None
+                and self.state.temperature is not None
+                and self.state.humidity < Config.HUMIDITY_THRESHOLD
+                and self.state.temperature >= getattr(Config, "HUMIDITY_WARNING_TEMP_MIN", 35.0)
+            ):
+                risk = "Warning"
             
             # 3. 触发大模型赋能 (如果判定为高风险 或 用户手动请求 - 这里演示自动触发逻辑)
             # 为了防止频繁调用耗尽Token，我们设置一个冷却机制

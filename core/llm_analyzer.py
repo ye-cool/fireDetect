@@ -154,7 +154,12 @@ class FireLLMAnalyzer:
             pass
 
         try:
-            if humidity is not None and float(humidity) < float(getattr(Config, "HUMIDITY_THRESHOLD", 20.0)):
+            if (
+                humidity is not None
+                and temperature is not None
+                and float(humidity) < float(getattr(Config, "HUMIDITY_THRESHOLD", 20.0))
+                and float(temperature) >= float(getattr(Config, "HUMIDITY_WARNING_TEMP_MIN", 35.0))
+            ):
                 return "Warning"
         except Exception:
             pass
@@ -204,9 +209,19 @@ class FireLLMAnalyzer:
             temp_over = None
 
         try:
-            hum_low = humidity is not None and float(humidity) < float(getattr(Config, "HUMIDITY_THRESHOLD", 20.0))
+            hum_low_raw = humidity is not None and float(humidity) < float(getattr(Config, "HUMIDITY_THRESHOLD", 20.0))
         except Exception:
-            hum_low = None
+            hum_low_raw = None
+
+        try:
+            hum_low_effective = (
+                humidity is not None
+                and temperature is not None
+                and float(humidity) < float(getattr(Config, "HUMIDITY_THRESHOLD", 20.0))
+                and float(temperature) >= float(getattr(Config, "HUMIDITY_WARNING_TEMP_MIN", 35.0))
+            )
+        except Exception:
+            hum_low_effective = None
 
         try:
             mq2_over = (
@@ -224,13 +239,15 @@ class FireLLMAnalyzer:
             "mq2_analog": mq2_value,
             "mq2_threshold": getattr(Config, "SMOKE_THRESHOLD_ANALOG", None) if getattr(Config, "USE_ADC", False) else None,
             "temp_over_threshold": temp_over,
-            "humidity_low": hum_low,
+            "humidity_low_raw": hum_low_raw,
+            "humidity_low_effective": hum_low_effective,
             "mq2_over_threshold": mq2_over,
             "vision_fire": vision_fire_detected,
             "detections": dets,
             "risk_level": rule_risk,
             "temp_threshold": getattr(Config, "TEMP_THRESHOLD", 50.0),
             "humidity_threshold": getattr(Config, "HUMIDITY_THRESHOLD", 20.0),
+            "humidity_warning_temp_min": getattr(Config, "HUMIDITY_WARNING_TEMP_MIN", 35.0),
         }
 
         if getattr(Config, "LLM_FORCE_CHINESE", True):
@@ -240,7 +257,7 @@ class FireLLMAnalyzer:
                 "输出字段必须且仅包含：risk_level、description、suggestion。"
                 "risk_level必须与输入的risk_level完全一致(只能是Normal/Warning/Danger)。"
                 "description与suggestion必须使用中文。"
-                "描述中不得声称温度/湿度/烟雾/视觉“异常/触发”，除非对应的 *_over_threshold 或 smoke_digital/vision_fire 为 true。\n"
+                "描述中不得声称温度/湿度/烟雾/视觉“异常/触发”，除非对应字段为true：temp_over_threshold、humidity_low_effective、mq2_over_threshold、smoke_digital、vision_fire。\n"
             )
         else:
             prompt_prefix = (

@@ -23,9 +23,11 @@ class Config:
     YOLO_MODEL_PATH = os.getenv("YOLO_MODEL_PATH", "models/fire_yolo.onnx")
     YOLO_CLASSES = ["fire", "smoke"]
     YOLO_INPUT_SIZE = 320
-    YOLO_CONF_THRESHOLD = 0.4
+    YOLO_CONF_THRESHOLD = 0.2
     YOLO_IOU_THRESHOLD = 0.45
     YOLO_INFER_INTERVAL_SECONDS = 0.5
+    YOLO_FIRE_LABELS = ["fire", "flame"]
+    YOLO_FIRE_MIN_CONF = 0.2
     
     # 阈值设置
     TEMP_THRESHOLD = 50.0  # 摄氏度

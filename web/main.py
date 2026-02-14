@@ -86,7 +86,12 @@ def generate_frames():
                     except Exception:
                         continue
 
-                    color = (0, 0, 255) if label.lower() in ("fire", "flame") else (255, 128, 0)
+                    if label.lower() in ("fire", "flame"):
+                        color = (0, 0, 255)
+                    elif label.lower() == "smoke":
+                        color = (0, 165, 255)
+                    else:
+                        color = (255, 128, 0)
                     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                     cv2.putText(
                         frame,

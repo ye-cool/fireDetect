@@ -130,6 +130,7 @@ class DataFusionSystem:
                     else:
                         self.state.vision_detections = [
                             {
+                                "class_id": d.class_id,
                                 "label": d.label,
                                 "confidence": d.confidence,
                                 "x1": d.x1,
@@ -139,8 +140,11 @@ class DataFusionSystem:
                             }
                             for d in detections
                         ]
+                        fire_labels = set([s.lower() for s in getattr(Config, "YOLO_FIRE_LABELS", ["fire", "flame"])])
+                        fire_min_conf = float(getattr(Config, "YOLO_FIRE_MIN_CONF", 0.2))
                         self.state.vision_fire_detected = any(
-                            (d["label"] or "").lower() in ("fire", "flame")
+                            (str(d.get("label", "")).lower() in fire_labels)
+                            and float(d.get("confidence", 0)) >= fire_min_conf
                             for d in self.state.vision_detections
                         )
                         self.state.vision_last_time = now

@@ -253,14 +253,16 @@
               ) {
                 visionEl.textContent = "未启用/无数据";
               } else if (data.vision_fire_detected) {
-                visionEl.textContent = "⚠️ 火焰";
+                if (n > 0) {
+                  const top = data.vision_detections[0];
+                  const label = top?.label ?? top?.class_id ?? "?";
+                  const conf = typeof top?.confidence === "number" ? top.confidence.toFixed(2) : "";
+                  visionEl.textContent = `目标:${n} 最高:${label} ${conf}`.trim();
+                } else {
+                  visionEl.textContent = "无";
+                }
               } else {
                 const n = Array.isArray(data.vision_detections)
-                  ? data.vision_detections.length
-                  : 0;
-                visionEl.textContent = n > 0 ? `目标:${n}` : "无";
-              }
-            }
 
             const riskEl = document.getElementById("risk-display");
             riskEl.textContent = (data.risk_level || "normal").toUpperCase();

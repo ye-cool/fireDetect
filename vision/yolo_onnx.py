@@ -8,6 +8,7 @@ import numpy as np
 
 @dataclass
 class Detection:
+    class_id: int
     label: str
     confidence: float
     x1: int
@@ -145,7 +146,7 @@ class YoloOnnxDetector:
             label = self.class_names[cls] if 0 <= cls < len(self.class_names) else str(cls)
             x1, y1, x2, y2 = boxes[i]
             detections.append(
-                Detection(label=label, confidence=float(scores[i]), x1=x1, y1=y1, x2=x2, y2=y2)
+                Detection(class_id=int(cls), label=label, confidence=float(scores[i]), x1=x1, y1=y1, x2=x2, y2=y2)
             )
         return detections
 
@@ -167,4 +168,3 @@ class YoloOnnxDetector:
                 cv2.LINE_AA,
             )
         return frame_bgr
-

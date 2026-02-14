@@ -38,3 +38,4 @@ class Config:
     # 拉取模型: ollama pull moondream
     LLM_LOCAL_URL = "http://localhost:11434/v1"
     LLM_MODEL_LOCAL = "moondream" # 或 "llava:7b" (树莓派上较慢), "llava-phi3"
+    LLM_TIMEOUT_SECONDS = 30

@@ -77,7 +77,8 @@ class FireLLMAnalyzer:
                         ],
                     }
                 ],
-                max_tokens=300
+                max_tokens=300,
+                timeout=Config.LLM_TIMEOUT_SECONDS
             )
             return response.choices[0].message.content
         except Exception as e:

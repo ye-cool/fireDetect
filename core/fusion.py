@@ -31,6 +31,7 @@ class DataFusionSystem:
         self.last_analysis_time = 0
         self.last_analysis_error = ""
         self.last_analysis_trigger = ""
+        self.last_analysis_request_id = 0
         
     def start(self):
         self.running = True
@@ -59,6 +60,7 @@ class DataFusionSystem:
                 "llm_last_error": self.last_analysis_error,
                 "llm_in_progress": self._analysis_in_progress,
                 "llm_last_trigger": self.last_analysis_trigger,
+                "llm_last_request_id": self.last_analysis_request_id,
                 "timestamp": self.state.last_update
             }
 
@@ -117,12 +119,19 @@ class DataFusionSystem:
                 return False
             self._analysis_in_progress = True
             self.last_analysis_trigger = trigger
+            self.last_analysis_request_id += 1
+            request_id = self.last_analysis_request_id
+            self.last_analysis_error = ""
+            self.last_analysis_time = time.time()
 
-        t = threading.Thread(target=self._run_llm_analysis, daemon=True)
+        with self._lock:
+            self.state.llm_analysis_result = "分析中..."
+
+        t = threading.Thread(target=self._run_llm_analysis, args=(request_id,), daemon=True)
         t.start()
         return True
 
-    def _run_llm_analysis(self):
+    def _run_llm_analysis(self, request_id: int):
         try:
             with self._lock:
                 temperature = self.state.temperature
@@ -133,10 +142,8 @@ class DataFusionSystem:
             analysis = self.llm.analyze(temperature, humidity, smoke_detected, frame)
             with self._lock:
                 self.state.llm_analysis_result = analysis
-            self.last_analysis_time = time.time()
             self.last_analysis_error = ""
         except Exception as e:
-            self.last_analysis_time = time.time()
             self.last_analysis_error = str(e)
         finally:
             with self._analysis_lock:

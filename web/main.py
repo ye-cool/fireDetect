@@ -47,6 +47,22 @@ async def analyze_now():
     started = fusion_system.trigger_llm_analysis(trigger="manual")
     return JSONResponse(content={"started": started, "state": fusion_system.get_state()}, headers={"Cache-Control": "no-store"})
 
+
+@app.get("/api/ollama")
+async def ollama_status():
+    import socket
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(1)
+    try:
+        ok = sock.connect_ex(("127.0.0.1", 11434)) == 0
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+    return JSONResponse(content={"ok": ok}, headers={"Cache-Control": "no-store"})
+
 def generate_frames():
     """视频流生成器"""
     while True:

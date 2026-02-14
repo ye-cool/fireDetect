@@ -168,6 +168,7 @@
             >
               正在等待数据...
             </div>
+            <div id="ai-meta" class="text-xs text-gray-400 mt-2"></div>
           </div>
         </div>
       </div>
@@ -247,10 +248,17 @@
               (data.risk_level || "normal").toLowerCase();
 
             const aiEl = document.getElementById("ai-analysis");
+            const aiMetaEl = document.getElementById("ai-meta");
             const analyzeBtn = document.getElementById("analyze-btn");
             if (analyzeBtn) {
               analyzeBtn.disabled = !!data.llm_in_progress;
               analyzeBtn.textContent = data.llm_in_progress ? "分析中..." : "立即分析";
+            }
+            if (aiMetaEl) {
+              const reqId = data.llm_last_request_id ?? "-";
+              const trig = data.llm_last_trigger ?? "-";
+              const err = data.llm_last_error ? `错误: ${data.llm_last_error}` : "";
+              aiMetaEl.textContent = `request_id: ${reqId}  trigger: ${trig}  ${err}`.trim();
             }
             try {
               const aiJson = JSON.parse(data.llm_analysis);

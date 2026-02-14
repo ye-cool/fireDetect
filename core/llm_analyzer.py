@@ -1,5 +1,7 @@
 import base64
 import logging
+import json
+import re
 from openai import OpenAI
 from config import Config
 import cv2
@@ -12,15 +14,62 @@ class FireLLMAnalyzer:
                 api_key="ollama", # Ollama 不需要真实Key，但库需要占位符
                 base_url=Config.LLM_LOCAL_URL
             )
-            self.model = Config.LLM_MODEL_LOCAL
+            self.model = ""
             logging.info(f"LLM分析器已初始化 (本地模式: {self.model})")
         else:
             self.client = OpenAI(
                 api_key=Config.LLM_API_KEY,
                 base_url=Config.LLM_BASE_URL
             )
-            self.model = Config.LLM_MODEL_CLOUD
+            self.model = ""
             logging.info(f"LLM分析器已初始化 (云端模式: {self.model})")
+
+        self._refresh_model_from_config()
+
+    def _refresh_model_from_config(self):
+        if Config.LLM_MODE == "local":
+            if getattr(Config, "LLM_USE_IMAGE", False):
+                self.model = Config.LLM_MODEL_LOCAL
+            else:
+                self.model = getattr(Config, "LLM_MODEL_LOCAL_TEXT", "") or Config.LLM_MODEL_LOCAL
+        else:
+            self.model = Config.LLM_MODEL_CLOUD
+
+    def _normalize_json(self, text: str, fallback_risk: str = "Normal") -> str:
+        def _ensure(obj):
+            risk = str(obj.get("risk_level", fallback_risk) or fallback_risk)
+            if risk not in ("Normal", "Warning", "Danger"):
+                risk = fallback_risk
+            return {
+                "risk_level": risk,
+                "description": str(obj.get("description", "") or ""),
+                "suggestion": str(obj.get("suggestion", "") or ""),
+            }
+
+        if not text:
+            return json.dumps(_ensure({}), ensure_ascii=False)
+
+        s = text.strip()
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, dict):
+                return json.dumps(_ensure(parsed), ensure_ascii=False)
+        except Exception:
+            pass
+
+        m = re.search(r"\{[\s\S]*\}", s)
+        if m:
+            try:
+                parsed = json.loads(m.group(0))
+                if isinstance(parsed, dict):
+                    return json.dumps(_ensure(parsed), ensure_ascii=False)
+            except Exception:
+                pass
+
+        return json.dumps(
+            _ensure({"description": s, "suggestion": "请结合现场情况核验。"}),
+            ensure_ascii=False,
+        )
 
     def encode_image(self, image):
         """将OpenCV图像转换为Base64字符串"""
@@ -42,55 +91,45 @@ class FireLLMAnalyzer:
         return base64.b64encode(buffer).decode('utf-8')
 
     def analyze_summary(self, temperature, humidity, smoke_detected, mq2_value, vision_fire_detected, vision_detections):
+        self._refresh_model_from_config()
         if Config.LLM_MODE == "cloud" and not Config.LLM_API_KEY:
             logging.warning("未配置 LLM API Key，跳过大模型分析")
             return "未配置大模型，仅依据规则引擎报警"
 
-        vision_text = "无"
+        vision_text = "none"
         if isinstance(vision_detections, list) and vision_detections:
-            vision_text = ", ".join(
+            vision_text = ",".join(
                 [
-                    f"{d.get('label')}({float(d.get('confidence', 0)):.2f})"
+                    f"{d.get('label')}:{float(d.get('confidence', 0)):.2f}"
                     for d in vision_detections[:6]
                 ]
             )
 
-        prompt = f"""
-你是家庭火灾安全专家。请根据边缘端融合后的结构化信息，输出最终风险评估和建议。
-
-【传感器】
-- 温度: {temperature}
-- 湿度: {humidity}
-- 烟雾(阈值判定): {smoke_detected}
-- MQ-2 模拟值: {mq2_value}
-
-【视觉(YOLO)】
-- 视觉火焰判定: {vision_fire_detected}
-- 目标列表: {vision_text}
-
-【要求】
-1) 给出风险等级: Normal/Warning/Danger
-2) 说明判断依据（简短）
-3) 给出行动建议（简短，可执行）
-
-仅以 JSON 返回，字段: risk_level, description, suggestion。
-"""
+        prompt = (
+            "请根据以下结构化信息判断火灾风险，严格只输出JSON，不要Markdown。"
+            "字段必须包含 risk_level(只能是Normal/Warning/Danger), description, suggestion。\n"
+            f"temp={temperature}; hum={humidity}; smoke={smoke_detected}; mq2={mq2_value}; "
+            f"vision_fire={vision_fire_detected}; vision={vision_text}"
+        )
 
         try:
             logging.info(f"正在调用大模型 ({self.model})...")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=200,
+                max_tokens=getattr(Config, "LLM_MAX_TOKENS", 120),
+                temperature=getattr(Config, "LLM_TEMPERATURE", 0.0),
+                top_p=getattr(Config, "LLM_TOP_P", 0.3),
                 timeout=Config.LLM_TIMEOUT_SECONDS,
             )
-            return response.choices[0].message.content
+            return self._normalize_json(response.choices[0].message.content)
         except Exception as e:
             logging.error(f"LLM分析失败: {e}")
-            return f"智能分析服务暂时不可用 ({str(e)})"
+            return self._normalize_json(f"智能分析服务暂时不可用 ({str(e)})")
 
     def analyze(self, temperature, humidity, smoke_detected, image, mq2_value=None, vision_fire_detected=None, vision_detections=None):
         """调用大模型进行分析"""
+        self._refresh_model_from_config()
         # 云端模式下如果没有Key则跳过
         if Config.LLM_MODE == "cloud" and not Config.LLM_API_KEY:
             logging.warning("未配置 LLM API Key，跳过大模型分析")

@@ -70,6 +70,15 @@ class DataFusionSystem:
 
     def get_state(self):
         with self._lock:
+            if Config.LLM_MODE == "local":
+                effective_model = (
+                    Config.LLM_MODEL_LOCAL
+                    if bool(getattr(Config, "LLM_USE_IMAGE", False))
+                    else (getattr(Config, "LLM_MODEL_LOCAL_TEXT", "") or Config.LLM_MODEL_LOCAL)
+                )
+            else:
+                effective_model = Config.LLM_MODEL_CLOUD
+
             return {
                 "temperature": self.state.temperature,
                 "humidity": self.state.humidity,
@@ -81,6 +90,7 @@ class DataFusionSystem:
                 "llm_analysis": self.state.llm_analysis_result,
                 "llm_mode": Config.LLM_MODE,
                 "llm_model": getattr(self.llm, "model", ""),
+                "llm_model_effective": effective_model,
                 "llm_use_image": bool(getattr(Config, "LLM_USE_IMAGE", False)),
                 "llm_last_time": self.last_analysis_time,
                 "llm_last_duration_ms": self.last_analysis_duration_ms,

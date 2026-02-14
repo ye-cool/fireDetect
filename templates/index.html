@@ -313,13 +313,16 @@
                 ? "错误: " + data.llm_last_error
                 : "";
               const model = data.llm_model ? String(data.llm_model) : "-";
+              const modelEff = data.llm_model_effective
+                ? String(data.llm_model_effective)
+                : "-";
               const useImg = data.llm_use_image ? "image" : "text";
               const dur =
                 typeof data.llm_last_duration_ms === "number"
                   ? `${data.llm_last_duration_ms}ms`
                   : "";
               aiMetaEl.textContent =
-                `model: ${model} (${useImg})  ${dur}  request_id: ${reqId}  trigger: ${trig}  ${err}`.trim();
+                `model: ${model} -> ${modelEff} (${useImg})  ${dur}  request_id: ${reqId}  trigger: ${trig}  ${err}`.trim();
             }
             try {
               const aiJson = JSON.parse(data.llm_analysis);

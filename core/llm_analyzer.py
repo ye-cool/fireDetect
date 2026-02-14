@@ -71,6 +71,36 @@ class FireLLMAnalyzer:
             ensure_ascii=False,
         )
 
+    def _rule_risk(self, temperature, humidity, smoke_detected, mq2_value, vision_fire_detected) -> str:
+        if vision_fire_detected is True:
+            return "Danger"
+        if smoke_detected is True:
+            return "Danger"
+
+        try:
+            if (
+                getattr(Config, "USE_ADC", False)
+                and mq2_value is not None
+                and float(mq2_value) > float(getattr(Config, "SMOKE_THRESHOLD_ANALOG", 15000))
+            ):
+                return "Danger"
+        except Exception:
+            pass
+
+        try:
+            if temperature is not None and float(temperature) > float(getattr(Config, "TEMP_THRESHOLD", 50.0)):
+                return "Warning"
+        except Exception:
+            pass
+
+        try:
+            if humidity is not None and float(humidity) < float(getattr(Config, "HUMIDITY_THRESHOLD", 20.0)):
+                return "Warning"
+        except Exception:
+            pass
+
+        return "Normal"
+
     def encode_image(self, image):
         """将OpenCV图像转换为Base64字符串"""
         if image is None:
@@ -96,24 +126,52 @@ class FireLLMAnalyzer:
             logging.warning("未配置 LLM API Key，跳过大模型分析")
             return "未配置大模型，仅依据规则引擎报警"
 
-        vision_text = "none"
+        rule_risk = self._rule_risk(temperature, humidity, smoke_detected, mq2_value, vision_fire_detected)
+
+        dets = []
         if isinstance(vision_detections, list) and vision_detections:
-            vision_text = ",".join(
-                [
-                    f"{d.get('label')}:{float(d.get('confidence', 0)):.2f}"
-                    for d in vision_detections[:6]
-                ]
-            )
+            for d in vision_detections[:5]:
+                dets.append(
+                    {
+                        "label": d.get("label"),
+                        "confidence": float(d.get("confidence", 0) or 0),
+                    }
+                )
+
+        context = {
+            "temperature_c": temperature,
+            "humidity_pct": humidity,
+            "smoke_digital": smoke_detected,
+            "mq2_analog": mq2_value,
+            "mq2_threshold": getattr(Config, "SMOKE_THRESHOLD_ANALOG", None) if getattr(Config, "USE_ADC", False) else None,
+            "vision_fire": vision_fire_detected,
+            "detections": dets,
+            "risk_level": rule_risk,
+            "temp_threshold": getattr(Config, "TEMP_THRESHOLD", 50.0),
+            "humidity_threshold": getattr(Config, "HUMIDITY_THRESHOLD", 20.0),
+        }
 
         prompt = (
-            "请根据以下结构化信息判断火灾风险，严格只输出JSON，不要Markdown。"
-            "字段必须包含 risk_level(只能是Normal/Warning/Danger), description, suggestion。\n"
-            f"temp={temperature}; hum={humidity}; smoke={smoke_detected}; mq2={mq2_value}; "
-            f"vision_fire={vision_fire_detected}; vision={vision_text}"
+            "You will be given JSON data from sensors and YOLO. "
+            "Do NOT invent values. If a field is null/None, say 'unavailable'. "
+            "Output ONLY JSON with keys risk_level, description, suggestion. "
+            "risk_level MUST equal input.risk_level.\n"
+            + json.dumps(context, ensure_ascii=False, separators=(",", ":"))
         )
 
         try:
             logging.info(f"正在调用大模型 ({self.model})...")
+            extra_body = None
+            if Config.LLM_MODE == "local":
+                extra_body = {
+                    "options": {
+                        "num_predict": int(getattr(Config, "LLM_MAX_TOKENS", 80)),
+                        "temperature": float(getattr(Config, "LLM_TEMPERATURE", 0.0)),
+                        "top_p": float(getattr(Config, "LLM_TOP_P", 0.2)),
+                        "num_ctx": int(getattr(Config, "LLM_NUM_CTX", 512)),
+                    }
+                }
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
@@ -121,11 +179,12 @@ class FireLLMAnalyzer:
                 temperature=getattr(Config, "LLM_TEMPERATURE", 0.0),
                 top_p=getattr(Config, "LLM_TOP_P", 0.3),
                 timeout=Config.LLM_TIMEOUT_SECONDS,
+                extra_body=extra_body,
             )
-            return self._normalize_json(response.choices[0].message.content)
+            return self._normalize_json(response.choices[0].message.content, fallback_risk=rule_risk)
         except Exception as e:
             logging.error(f"LLM分析失败: {e}")
-            return self._normalize_json(f"智能分析服务暂时不可用 ({str(e)})")
+            return self._normalize_json(f"智能分析服务暂时不可用 ({str(e)})", fallback_risk=rule_risk)
 
     def analyze(self, temperature, humidity, smoke_detected, image, mq2_value=None, vision_fire_detected=None, vision_detections=None):
         """调用大模型进行分析"""

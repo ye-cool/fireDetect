@@ -317,15 +317,40 @@
             }
             try {
               const aiJson = JSON.parse(data.llm_analysis);
+              const riskLevel =
+                aiJson.risk_level !== undefined
+                  ? aiJson.risk_level
+                  : aiJson.riskLevel !== undefined
+                  ? aiJson.riskLevel
+                  : aiJson.risk !== undefined
+                  ? aiJson.risk
+                  : "";
+              const description =
+                aiJson.description !== undefined
+                  ? aiJson.description
+                  : aiJson.desc !== undefined
+                  ? aiJson.desc
+                  : "";
+              const suggestion =
+                aiJson.suggestion !== undefined
+                  ? aiJson.suggestion
+                  : aiJson.advice !== undefined
+                  ? aiJson.advice
+                  : "";
+
+              if (riskLevel === "" && description === "" && suggestion === "") {
+                aiEl.textContent = data.llm_analysis || "暂无分析数据";
+                return;
+              }
               aiEl.innerHTML =
                 '<p class="mb-1"><strong class="text-white">风险评估:</strong> ' +
-                aiJson.risk_level +
+                String(riskLevel) +
                 "</p>" +
                 '<p class="mb-1"><strong class="text-white">描述:</strong> ' +
-                aiJson.description +
+                String(description) +
                 "</p>" +
                 '<p><strong class="text-white">建议:</strong> ' +
-                aiJson.suggestion +
+                String(suggestion) +
                 "</p>";
             } catch (e) {
               aiEl.textContent = data.llm_analysis || "暂无分析数据";

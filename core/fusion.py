@@ -9,9 +9,10 @@ from config import Config
 
 class SystemState:
     def __init__(self):
-        self.temperature = 0.0
-        self.humidity = 0.0
-        self.smoke_detected = False
+        self.temperature = None
+        self.humidity = None
+        self.smoke_detected = None
+        self.mq2_value = None
         self.last_update = 0
         self.fire_risk_level = "Normal" # Normal, Warning, Danger
         self.llm_analysis_result = ""
@@ -46,6 +47,7 @@ class DataFusionSystem:
                 "temperature": self.state.temperature,
                 "humidity": self.state.humidity,
                 "smoke_detected": self.state.smoke_detected,
+                "mq2_value": self.state.mq2_value, # 暴露给前端
                 "risk_level": self.state.fire_risk_level,
                 "llm_analysis": self.state.llm_analysis_result,
                 "timestamp": self.state.last_update
@@ -60,21 +62,23 @@ class DataFusionSystem:
             # 1. 获取数据
             temp, hum = self.sensors.read_dht22()
             smoke = self.sensors.read_mq2()
+            mq2_val = self.sensors.get_mq2_value() # 获取模拟值
             frame = self.camera.get_frame()
 
             # 更新当前状态
             with self._lock:
-                if temp is not None: self.state.temperature = temp
-                if hum is not None: self.state.humidity = hum
+                self.state.temperature = temp
+                self.state.humidity = hum
                 self.state.smoke_detected = smoke
+                self.state.mq2_value = mq2_val
                 self.state.latest_frame = frame
                 self.state.last_update = time.time()
 
             # 2. 规则引擎初步判定 (边缘计算层)
             risk = "Normal"
-            if self.state.smoke_detected:
+            if self.state.smoke_detected is True:
                 risk = "Danger"
-            elif self.state.temperature > Config.TEMP_THRESHOLD:
+            elif self.state.temperature is not None and self.state.temperature > Config.TEMP_THRESHOLD:
                 risk = "Warning"
             
             # 3. 触发大模型赋能 (如果判定为高风险 或 用户手动请求 - 这里演示自动触发逻辑)

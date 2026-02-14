@@ -201,24 +201,29 @@
 
             if (data.mq2_value !== undefined) {
               const mq2Val = data.mq2_value;
-              if (typeof mq2Val === "number" && mq2Val < 0) {
-                document.getElementById("mq2-analog").textContent = "ADC未就绪";
+              const barEl = document.getElementById("mq2-bar");
+
+              if (mq2Val === null) {
+                document.getElementById("mq2-analog").textContent = "获取失败";
+                barEl.style.width = "0%";
+                barEl.className = "bg-gray-500 h-full transition-all duration-500";
               } else {
                 document.getElementById("mq2-analog").textContent = mq2Val;
+                const percent =
+                  typeof mq2Val === "number" && mq2Val > 0
+                    ? Math.min((mq2Val / 26000) * 100, 100)
+                    : 0;
+                barEl.style.width = percent + "%";
+                barEl.className = data.smoke_detected
+                  ? "bg-red-500 h-full transition-all duration-500"
+                  : "bg-blue-500 h-full transition-all duration-500";
               }
-
-              const percent =
-                typeof mq2Val === "number" && mq2Val > 0
-                  ? Math.min((mq2Val / 26000) * 100, 100)
-                  : 0;
-              const barEl = document.getElementById("mq2-bar");
-              barEl.style.width = percent + "%";
-              barEl.className = data.smoke_detected
-                ? "bg-red-500 h-full transition-all duration-500"
-                : "bg-blue-500 h-full transition-all duration-500";
             }
 
-            if (data.smoke_detected) {
+            if (data.smoke_detected === null) {
+              smokeEl.textContent = "⚠️ 获取失败";
+              smokeEl.className = "text-xl font-bold text-yellow-400";
+            } else if (data.smoke_detected) {
               smokeEl.textContent = "⚠️ 检测到烟雾";
               smokeEl.className = "text-xl font-bold text-red-500";
             } else {

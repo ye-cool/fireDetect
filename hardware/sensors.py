@@ -119,9 +119,7 @@ class SensorManager:
                 except Exception:
                     pass
                 return None, None
-        else:
-            # 模拟数据
-            return round(random.uniform(20.0, 60.0), 1), round(random.uniform(30.0, 70.0), 1)
+        return None, None
 
     def read_mq2(self):
         """
@@ -147,10 +145,8 @@ class SensorManager:
                     return state == Config.SMOKE_DETECTED_VALUE
                 except Exception:
                     return False
-            return False
-        else:
-            # 模拟模式
-            return False
+            return None
+        return None
 
     def get_mq2_value(self):
         """获取 MQ-2 的原始模拟值 (用于前端显示波形等)"""
@@ -158,10 +154,8 @@ class SensorManager:
             try:
                 return self._read_ads1115_raw(Config.MQ2_ANALOG_CHANNEL)
             except Exception:
-                return 0
-        if _LIBS_AVAILABLE and Config.USE_ADC and not self.i2c_bus:
-            return -1
-        return 0
+                return None
+        return None
 
     def cleanup(self):
         if _LIBS_AVAILABLE:

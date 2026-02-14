@@ -26,7 +26,19 @@ class FireLLMAnalyzer:
         """将OpenCV图像转换为Base64字符串"""
         if image is None:
             return None
-        _, buffer = cv2.imencode('.jpg', image)
+        try:
+            h, w = image.shape[:2]
+            max_side = int(getattr(Config, "LLM_IMAGE_MAX_SIDE", 384))
+            if max(h, w) > max_side:
+                scale = max_side / float(max(h, w))
+                new_w = max(1, int(w * scale))
+                new_h = max(1, int(h * scale))
+                image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        except Exception:
+            pass
+
+        quality = int(getattr(Config, "LLM_IMAGE_JPEG_QUALITY", 55))
+        _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
         return base64.b64encode(buffer).decode('utf-8')
 
     def analyze(self, temperature, humidity, smoke_detected, image):
@@ -40,7 +52,34 @@ class FireLLMAnalyzer:
 
         base64_image = self.encode_image(image)
         if not base64_image:
-            return "无法获取图像，无法进行视觉确认"
+            prompt = f"""
+            你是一个家庭火灾安全专家。请根据以下传感器数据判断是否存在火灾风险。
+
+            【传感器数据】
+            - 温度: {temperature}°C
+            - 湿度: {humidity}%
+            - 烟雾传感器状态: {'检测到烟雾' if smoke_detected else '正常'}
+
+            【任务】
+            1. 分析传感器数据是否异常。
+            2. 综合判断火灾风险等级（正常/可疑/危险）。
+            3. 给出简短的行动建议。
+
+            请以JSON格式返回，包含字段: risk_level (String), description (String), suggestion (String)。
+            """
+
+            try:
+                logging.info(f"正在调用大模型 ({self.model})...")
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=200,
+                    timeout=Config.LLM_TIMEOUT_SECONDS,
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                logging.error(f"LLM分析失败: {e}")
+                return f"智能分析服务暂时不可用 ({str(e)})"
 
         prompt = f"""
         你是一个家庭火灾安全专家。请根据以下传感器数据和现场图像判断是否存在火灾风险。
@@ -72,15 +111,28 @@ class FireLLMAnalyzer:
                                 "type": "image_url",
                                 "image_url": {
                                     "url": f"data:image/jpeg;base64,{base64_image}"
-                                }
-                            }
+                                },
+                            },
                         ],
                     }
                 ],
-                max_tokens=300,
-                timeout=Config.LLM_TIMEOUT_SECONDS
+                max_tokens=200,
+                timeout=Config.LLM_TIMEOUT_SECONDS,
             )
             return response.choices[0].message.content
         except Exception as e:
+            msg = str(e)
             logging.error(f"LLM分析失败: {e}")
+            if "timed out" in msg.lower() or "timeout" in msg.lower():
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=200,
+                        timeout=Config.LLM_TIMEOUT_SECONDS,
+                    )
+                    return response.choices[0].message.content
+                except Exception as e2:
+                    logging.error(f"LLM分析失败: {e2}")
+                    return f"智能分析服务暂时不可用 ({str(e2)})"
             return f"智能分析服务暂时不可用 ({str(e)})"

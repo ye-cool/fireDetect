@@ -247,22 +247,41 @@
 
             const visionEl = document.getElementById("vision-val");
             if (visionEl) {
+              const dets = Array.isArray(data.vision_detections)
+                ? data.vision_detections
+                : [];
+              const n = dets.length;
+
               if (
                 data.vision_fire_detected === null ||
                 data.vision_fire_detected === undefined
               ) {
                 visionEl.textContent = "未启用/无数据";
               } else if (data.vision_fire_detected) {
-                if (n > 0) {
-                  const top = data.vision_detections[0];
-                  const label = top?.label ?? top?.class_id ?? "?";
-                  const conf = typeof top?.confidence === "number" ? top.confidence.toFixed(2) : "";
-                  visionEl.textContent = `目标:${n} 最高:${label} ${conf}`.trim();
-                } else {
-                  visionEl.textContent = "无";
-                }
+                visionEl.textContent = "⚠️ 火焰";
+              } else if (n > 0) {
+                const top = dets[0] || {};
+                const label =
+                  top.label !== undefined
+                    ? String(top.label)
+                    : top.class_id !== undefined
+                    ? String(top.class_id)
+                    : "?";
+                const conf =
+                  typeof top.confidence === "number"
+                    ? top.confidence.toFixed(2)
+                    : "";
+                visionEl.textContent = (
+                  "目标:" +
+                  n +
+                  " 最高:" +
+                  label +
+                  (conf ? " " + conf : "")
+                ).trim();
               } else {
-                const n = Array.isArray(data.vision_detections)
+                visionEl.textContent = "无";
+              }
+            }
 
             const riskEl = document.getElementById("risk-display");
             riskEl.textContent = (data.risk_level || "normal").toUpperCase();
@@ -280,10 +299,18 @@
                 : "立即分析";
             }
             if (aiMetaEl) {
-              const reqId = data.llm_last_request_id ?? "-";
-              const trig = data.llm_last_trigger ?? "-";
+              const reqId =
+                data.llm_last_request_id === undefined ||
+                data.llm_last_request_id === null
+                  ? "-"
+                  : String(data.llm_last_request_id);
+              const trig =
+                data.llm_last_trigger === undefined ||
+                data.llm_last_trigger === null
+                  ? "-"
+                  : String(data.llm_last_trigger);
               const err = data.llm_last_error
-                ? `错误: ${data.llm_last_error}`
+                ? "错误: " + data.llm_last_error
                 : "";
               aiMetaEl.textContent =
                 `request_id: ${reqId}  trigger: ${trig}  ${err}`.trim();

@@ -1,6 +1,7 @@
 import cv2
 import uvicorn
 import time
+import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,7 +39,7 @@ async def read_root(request: Request):
 @app.get("/api/status")
 async def get_status():
     """获取当前系统状态API"""
-    return JSONResponse(content=fusion_system.get_state())
+    return JSONResponse(content=fusion_system.get_state(), headers={"Cache-Control": "no-store"})
 
 def generate_frames():
     """视频流生成器"""

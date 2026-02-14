@@ -165,39 +165,57 @@
     </div>
 
     <script>
+      function setConnection(statusText, ok) {
+        const el = document.getElementById("connection-status");
+        el.textContent = statusText;
+        el.className = ok
+          ? "px-3 py-1 rounded bg-green-900 text-green-200 text-sm"
+          : "px-3 py-1 rounded bg-red-900 text-red-200 text-sm";
+      }
+
+      function safeNumber(val) {
+        return typeof val === "number" && Number.isFinite(val);
+      }
+
       function updateStatus() {
-        fetch("/api/status")
-          .then((response) => response.json())
+        fetch("/api/status?ts=" + Date.now(), { cache: "no-store" })
+          .then((response) => {
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            return response.json();
+          })
           .then((data) => {
-            // 更新数值
-            document.getElementById("temp-val").textContent =
-              data.temperature.toFixed(1);
-            document.getElementById("hum-val").textContent =
-              data.humidity.toFixed(1);
+            setConnection("系统在线", true);
+
+            document.getElementById("temp-val").textContent = safeNumber(
+              data.temperature
+            )
+              ? data.temperature.toFixed(1)
+              : "--";
+            document.getElementById("hum-val").textContent = safeNumber(
+              data.humidity
+            )
+              ? data.humidity.toFixed(1)
+              : "--";
 
             const smokeEl = document.getElementById("smoke-val");
 
-            // 更新模拟值显示
             if (data.mq2_value !== undefined) {
               const mq2Val = data.mq2_value;
-              document.getElementById("mq2-analog").textContent = mq2Val;
-              if (mq2Val < 0) {
+              if (typeof mq2Val === "number" && mq2Val < 0) {
                 document.getElementById("mq2-analog").textContent = "ADC未就绪";
-              }
-              data.mq2_value;
-              const percent =
-                mq2Val > 0 ? Math.min((mq2Val / 26000) * 100, 100) : 0;
-              const percent = Math.min((data.mq2_value / 26000) * 100, 100);
-              const barEl = document.getElementById("mq2-bar");
-
-              // 根据浓度改变进度条颜色
-              if (data.smoke_detected) {
-                barEl.className =
-                  "bg-red-500 h-full transition-all duration-500";
               } else {
-                barEl.className =
-                  "bg-blue-500 h-full transition-all duration-500";
+                document.getElementById("mq2-analog").textContent = mq2Val;
               }
+
+              const percent =
+                typeof mq2Val === "number" && mq2Val > 0
+                  ? Math.min((mq2Val / 26000) * 100, 100)
+                  : 0;
+              const barEl = document.getElementById("mq2-bar");
+              barEl.style.width = percent + "%";
+              barEl.className = data.smoke_detected
+                ? "bg-red-500 h-full transition-all duration-500"
+                : "bg-blue-500 h-full transition-all duration-500";
             }
 
             if (data.smoke_detected) {
@@ -208,29 +226,35 @@
               smokeEl.className = "text-xl font-bold text-green-500";
             }
 
-            // 更新风险等级
             const riskEl = document.getElementById("risk-display");
-            riskEl.textContent = data.risk_level.toUpperCase();
-            riskEl.className = `text-5xl font-black transition-colors duration-300 risk-${data.risk_level.toLowerCase()}`;
+            riskEl.textContent = (data.risk_level || "normal").toUpperCase();
+            riskEl.className =
+              "text-5xl font-black transition-colors duration-300 risk-" +
+              (data.risk_level || "normal").toLowerCase();
 
-            // 更新AI分析
             const aiEl = document.getElementById("ai-analysis");
-            // 如果是JSON字符串，尝试格式化，否则直接显示
             try {
               const aiJson = JSON.parse(data.llm_analysis);
-              aiEl.innerHTML = `
-                            <p class="mb-1"><strong class="text-white">风险评估:</strong> ${aiJson.risk_level}</p>
-                            <p class="mb-1"><strong class="text-white">描述:</strong> ${aiJson.description}</p>
-                            <p><strong class="text-white">建议:</strong> ${aiJson.suggestion}</p>
-                        `;
+              aiEl.innerHTML =
+                '<p class="mb-1"><strong class="text-white">风险评估:</strong> ' +
+                aiJson.risk_level +
+                "</p>" +
+                '<p class="mb-1"><strong class="text-white">描述:</strong> ' +
+                aiJson.description +
+                "</p>" +
+                '<p><strong class="text-white">建议:</strong> ' +
+                aiJson.suggestion +
+                "</p>";
             } catch (e) {
               aiEl.textContent = data.llm_analysis || "暂无分析数据";
             }
           })
-          .catch((err) => console.error("Error fetching status:", err));
+          .catch((err) => {
+            setConnection("API离线", false);
+            console.error("Error fetching status:", err);
+          });
       }
 
-      // 每2秒轮询一次状态
       setInterval(updateStatus, 2000);
       updateStatus();
     </script>

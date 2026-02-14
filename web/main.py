@@ -41,6 +41,12 @@ async def get_status():
     """获取当前系统状态API"""
     return JSONResponse(content=fusion_system.get_state(), headers={"Cache-Control": "no-store"})
 
+
+@app.post("/api/analyze")
+async def analyze_now():
+    started = fusion_system.trigger_llm_analysis(trigger="manual")
+    return JSONResponse(content={"started": started, "state": fusion_system.get_state()}, headers={"Cache-Control": "no-store"})
+
 def generate_frames():
     """视频流生成器"""
     while True:

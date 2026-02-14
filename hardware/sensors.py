@@ -21,6 +21,7 @@ class SensorManager:
         self._dht_ok = False
         self._gpio_ok = False
         self._adc_ok = False
+        self._last_dht_read_ts = 0.0
         self._setup()
 
     def _setup(self):
@@ -102,23 +103,26 @@ class SensorManager:
     def read_dht22(self):
         """读取温湿度"""
         if _LIBS_AVAILABLE and self._dht_ok and self.dht_device:
-            for _ in range(3):
-                try:
-                    temperature = self.dht_device.temperature
-                    humidity = self.dht_device.humidity
-                    if temperature is None or humidity is None:
-                        return None, None
-                    return temperature, humidity
-                except RuntimeError:
-                    time.sleep(0.2)
-                    continue
-                except Exception:
-                    try:
-                        self.dht_device.exit()
-                    except Exception:
-                        pass
-                    self._dht_ok = False
+            now = time.time()
+            if now - self._last_dht_read_ts < 2.1:
+                return None, None
+            self._last_dht_read_ts = now
+
+            try:
+                temperature = self.dht_device.temperature
+                humidity = self.dht_device.humidity
+                if temperature is None and humidity is None:
                     return None, None
+                return temperature, humidity
+            except RuntimeError:
+                return None, None
+            except Exception:
+                try:
+                    self.dht_device.exit()
+                except Exception:
+                    pass
+                self._dht_ok = False
+                return None, None
         return None, None
 
     def read_mq2(self):
